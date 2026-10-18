@@ -36,7 +36,11 @@ export async function importPdf(file: File, onProgress?: (message: string) => vo
   const hash = await sha256(data);
   const existing = useApp.getState().workspace.documents.find(d => d.sha256 === hash);
   if (existing) {
-    if (!await db.documents.get(existing.id)) { await db.documents.put({ id: existing.id, blob: file }); cache.delete(existing.id); }
+    if (!await db.documents.get(existing.id)) {
+      await db.documents.put({ id: existing.id, blob: file });
+      cache.delete(`${existing.id}:${existing.sha256}`);
+      useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
+    }
     useApp.getState().edit(w => { w.activeDocumentId = existing.id; }, false);
     toast('這篇文獻已在研究空間，已為你開啟'); return existing;
   }

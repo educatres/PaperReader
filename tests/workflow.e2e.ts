@@ -132,3 +132,24 @@ test('API keys are session-only; OpenAI and Gemini requests keep output separate
   await expect(page.getByRole('dialog', { name: '連接你的 AI' })).toBeVisible();
   await page.screenshot({ path: 'test-results/ai-settings.png' });
 });
+
+test('JSON metadata restores notes, then reattaches the matching PDF without duplicate documents', async ({ page }) => {
+  await loadSample(page); await selectPassage(page);
+  await page.getByRole('button', { name: '匯出研究', exact: true }).click();
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: /JSON 註記資料/ }).click();
+  const downloaded = await downloading;
+  const json = await readFile((await downloaded.path())!);
+  page.on('dialog', d => d.accept());
+  await page.getByRole('button', { name: '文獻庫', exact: true }).click();
+  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await expect(page.locator('.note-card')).toHaveCount(0);
+  await page.getByTestId('restore-input').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: json });
+  await expect(page.locator('.note-card')).toHaveCount(1);
+  await expect(page.locator('.empty-panel')).toContainText('找不到這篇 PDF');
+  await page.getByTestId('pdf-input').setInputFiles({ name: 'Reading as a Research Practice.pdf', mimeType: 'application/pdf', buffer: await readFile('public/sample.pdf') });
+  await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();
+  await expect(page.locator('.note-card')).toHaveCount(1);
+  await expect(page.locator('.document-tabs > button')).toHaveCount(1);
+  await expect.poll(() => page.locator('.pdf-highlight').count()).toBeGreaterThanOrEqual(3);
+});
