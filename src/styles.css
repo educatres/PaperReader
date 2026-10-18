@@ -91,3 +91,13 @@
   .provider-tabs > button { font-size: 10px; padding: 10px 5px; gap: 4px; }
   .provider-mark { font-size: 16px; }
 }
+.cgu-connection { margin-bottom: 20px; }
+.cgu-connection > .full-input { margin-top: 0; }
+.bridge-setup { padding: 14px; margin-top: 12px; background: #f5f7ee; border: 1px solid #e1e7d8; border-radius: 6px; font-size: 11px; line-height: 1.9; color: #627854; }
+.bridge-setup ol { padding-left: 20px; margin: 10px 0; }
+.bridge-setup li { margin: 7px 0; }
+.bridge-setup a, .cgu-connection a { text-decoration: underline; text-underline-offset: 3px; }
+.bridge-setup code { overflow-wrap: anywhere; }
+.bridge-setup .field-label { margin: 14px 0 0; }
+.bridge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.cgu-verify { margin-top: 14px; }

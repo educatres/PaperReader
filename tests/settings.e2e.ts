@@ -40,7 +40,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
     const request = route.request();
     requests.push({ url: request.url(), auth: request.headers().authorization, body: request.postDataJSON() });
     return request.url().endsWith('/models')
-      ? route.fulfill({ json: { data: [{ id: 'department/research-v2' }] } })
+      ? route.fulfill({ json: { data: [{ id: 'department/research-v2' }, { id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } })
       : route.fulfill({ json: { status: 'completed', output: [{ type: 'reasoning', content: [] }, { content: [{ type: 'output_text', text: 'CGU 測試翻譯。' }] }], usage: { total_tokens: 30 } } });
   });
   await page.goto('./');
@@ -53,6 +53,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   await page.getByRole('button', { name: '使用此金鑰' }).click();
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
   await expect(page.locator('.api-endpoint')).toContainText('https://air.cgu.edu.tw/cgullmapi/v1');
+  await page.getByLabel('CGU 連線方式').selectOption('direct');
   await expect(page.getByLabel('你的 API key')).toHaveValue('');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
   await expect(page.getByLabel('模型選項')).toHaveValue('gpt-6-luna');
@@ -71,7 +72,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   expect(requests.at(-1)!.body.input).toContain('Research source for translation.');
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
   await page.getByRole('button', { name: '取得模型清單' }).click();
-  await expect(page.locator('.settings-message')).toContainText('已取得 1 個模型');
+  await expect(page.locator('.settings-message')).toContainText('已取得 3 個模型');
   await page.getByLabel('模型選項').selectOption('custom');
   await page.getByLabel('選擇模型').fill('department/research-v2');
   await page.getByLabel('推理程度').selectOption('low');

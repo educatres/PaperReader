@@ -41,7 +41,7 @@ function HelpDialog({ close }: { close: () => void }) {
       ['08', '框選圖表，留下自己的解讀', 'PDF 工具列選擇「截圖模式」，在單頁拖曳框選後放開，即建立圖片便條。Esc 可取消，過小的框選不會建立便條。點圖片可放大，點「輸入或貼上文字」可填寫內容；文字預設完全留白，不執行 OCR。單張與關聯 AI 摘要只使用便條文字，不傳送或分析圖片。完整研究封裝包含圖片，JSON 與 Markdown 不含圖片。'],
     ].map(([n, title, text]) => <div className="help-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></div>)}
       <div className="shortcut-row"><span><kbd>Ctrl / ⌘</kbd> + <kbd>O</kbd> 開啟 PDF</span><span><kbd>Ctrl / ⌘</kbd> + <kbd>Z</kbd> 復原</span><span><kbd>N</kbd> 新便條</span><span><kbd>?</kbd> 使用指南</span></div>
-      <div className="data-disclosure"><strong>關於本機資料與金鑰</strong><p>GitHub Pages 版本的資料屬於目前網站來源，與 localhost 版本各自獨立。金鑰只存在分頁記憶體，重新整理後會清除，並直接用於向所選供應商驗證。網站沒有帳號、雲端同步或分析追蹤。清除瀏覽器網站資料會刪除研究內容；請定期匯出。掃描 PDF 的 OCR、原生 PDF 圖像理解尚未提供。</p></div>
+      <div className="data-disclosure"><strong>關於本機資料與金鑰</strong><p>GitHub Pages 版本的資料屬於目前網站來源，與 localhost 版本各自獨立。金鑰只暫存於記憶體，重新整理後會清除；CGU 預設經你電腦上的 localhost 助手傳送至官方 API，請在 AI 設定下載並配對。助手不保存金鑰。網站沒有帳號、雲端同步或分析追蹤。清除瀏覽器網站資料會刪除研究內容；請定期匯出。掃描 PDF 的 OCR、原生 PDF 圖像理解尚未提供。</p></div>
     </div>
   </Modal>;
 }

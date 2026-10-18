@@ -2,13 +2,14 @@ import { create } from 'zustand';
 import { db, loadWorkspace, saveWorkspace } from './lib/db';
 import { emptyWorkspace, now, uid, reasoningEfforts, type Workspace, type Preferences, type Note, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
 
-const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna' }, reasoningEffort: 'medium', toolbarCollapsed: false, split: 54, lastPage: {} };
+const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna' }, reasoningEffort: 'medium', toolbarCollapsed: false, cguConnection: 'localhost', split: 54, lastPage: {} };
 function readPreferences(): Preferences {
   try {
     const p = JSON.parse(localStorage.getItem('PaperReader.preferences') || '{}');
     return { ...defaultPreferences, provider: ['openai', 'gemini', 'cgu'].includes(p.provider) ? p.provider : 'openai',
       models: { openai: typeof p.models?.openai === 'string' ? p.models.openai : defaultPreferences.models.openai, gemini: typeof p.models?.gemini === 'string' ? p.models.gemini : '', cgu: typeof p.models?.cgu === 'string' ? p.models.cgu : defaultPreferences.models.cgu },
       reasoningEffort: reasoningEfforts.includes(p.reasoningEffort) ? p.reasoningEffort : 'medium', toolbarCollapsed: p.toolbarCollapsed === true,
+      cguConnection: p.cguConnection === 'direct' ? 'direct' : 'localhost',
       split: typeof p.split === 'number' ? Math.max(30, Math.min(75, p.split)) : 54, lastPage: p.lastPage || {} };
   } catch { return defaultPreferences; }
 }
