@@ -10,3 +10,4 @@ playwright-report/
 public/pdfjs/
 public/licenses/
 *.tsbuildinfo
+.guide-build/

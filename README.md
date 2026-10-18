@@ -2,6 +2,8 @@
 
 [開啟 PaperReader](https://educatres.github.io/PaperReader/) · [GitHub](https://github.com/educatres/PaperReader)
 
+[使用指引（PPTX，含範例操作截圖）](docs/PaperReader_使用指引.pptx) · [AI Agent 專案交接文件](交接文件.md)
+
 繁體中文的私人研究工作台：**讀 PDF → 選字標記 → 來源便條 → 翻譯與摘要 → 知識白板 → 可攜備份**。
 
 前端可直接部署 GitHub Pages，CGU 另提供自行在電腦執行的 localhost 連線助手。沒有登入、遠端資料庫、分析追蹤或代管 API 代理。
