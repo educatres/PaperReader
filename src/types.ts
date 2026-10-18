@@ -1,5 +1,8 @@
 export type Color = 'yellow' | 'green' | 'pink' | 'blue';
-export type Provider = 'openai' | 'gemini';
+export type Provider = 'openai' | 'gemini' | 'cgu';
+export const reasoningEfforts = ['low', 'medium', 'high'] as const;
+export type ReasoningEffort = typeof reasoningEfforts[number];
+export const reasoningLabels: Record<ReasoningEffort, string> = { low: '低', medium: '中', high: '高' };
 export type Point = { x: number; y: number };
 export type Quad = Point & { width: number; height: number };
 export type Viewport = Point & { zoom: number };
@@ -16,7 +19,7 @@ export interface Highlight {
   createdAt: string; updatedAt: string;
 }
 export interface AIResult {
-  text: string; provider: Provider; model: string; createdAt: string; usage?: number;
+  text: string; provider: Provider; model: string; createdAt: string; usage?: number; reasoningEffort?: ReasoningEffort;
 }
 export interface Note {
   id: string; documentId?: string; highlightId?: string;
@@ -33,7 +36,7 @@ export interface Relation {
 }
 export interface Chunk { text: string; startPage: number; endPage: number }
 export interface SummaryJob {
-  id: string; documentId: string; provider: Provider; model: string;
+  id: string; documentId: string; provider: Provider; model: string; reasoningEffort?: ReasoningEffort;
   chunks: Chunk[]; results: (AIResult | null)[]; status: 'paused' | 'running' | 'failed' | 'complete';
   error?: string; resultNoteId?: string; createdAt: string;
 }
@@ -43,7 +46,8 @@ export interface Workspace {
   viewport: Viewport; updatedAt: string;
 }
 export interface Preferences {
-  provider: Provider; models: Record<Provider, string>; split: number; lastPage: Record<string, number>;
+  provider: Provider; models: Record<Provider, string>; reasoningEffort: ReasoningEffort; toolbarCollapsed: boolean;
+  split: number; lastPage: Record<string, number>;
 }
 export const colors: Record<Color, string> = {
   yellow: '#e6c75e', green: '#88bda0', pink: '#dfa2b6', blue: '#9ab9d9',

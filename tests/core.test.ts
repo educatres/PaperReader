@@ -26,6 +26,18 @@ describe('portable data boundary', () => {
   it('rejects a JSON schema newer than this application', async () => {
     await expect(readImport(new File([JSON.stringify({ schemaVersion: 99 })], 'bad.json'))).rejects.toThrow();
   });
+  it('roundtrips CGU reasoning metadata and accepts older backups without it', () => {
+    const w = emptyWorkspace();
+    w.documents.push({ id: 'paper-1', name: 'Paper.pdf', sha256: 'a'.repeat(64), size: 10, pageCount: 1, pages: ['Evidence'], createdAt: now() });
+    const result = { text: '摘要', provider: 'cgu' as const, model: 'gpt-6-luna', reasoningEffort: 'high' as const, createdAt: now() };
+    w.notes.push({ ...manualNote(), summary: result });
+    w.jobs.push({ id: 'job-1', documentId: 'paper-1', provider: 'cgu', model: 'gpt-6-luna', reasoningEffort: 'high', chunks: [{ text: 'Evidence', startPage: 1, endPage: 1 }], results: [result], status: 'paused', createdAt: now() });
+    const restored = validateWorkspace(JSON.parse(JSON.stringify(w)));
+    expect(restored.jobs[0].reasoningEffort).toBe('high');
+    expect(restored.notes[0].summary).toEqual(result);
+    delete w.jobs[0].reasoningEffort; delete w.notes[0].summary!.reasoningEffort;
+    expect(validateWorkspace(w).jobs[0].reasoningEffort).toBeUndefined();
+  });
 });
 describe('source-preserving text chunking', () => {
   it('covers long pages without gaps and retains exact source page ranges', () => {
@@ -44,10 +56,11 @@ describe('source-preserving text chunking', () => {
 });
 describe('session-only credentials', () => {
   it('clears independent providers without affecting research data', () => {
-    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b');
+    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b'); setKey('cgu', 'test-key-c');
     expect(hasKey('openai')).toBe(true); expect(hasKey('gemini')).toBe(true);
     setKey('openai', ''); expect(hasKey('openai')).toBe(false); expect(hasKey('gemini')).toBe(true);
-    clearAllKeys(); expect(hasKey('gemini')).toBe(false);
+    expect(hasKey('cgu')).toBe(true);
+    clearAllKeys(); expect(hasKey('gemini')).toBe(false); expect(hasKey('cgu')).toBe(false);
     expect(JSON.stringify(emptyWorkspace())).not.toContain('test-key');
   });
 });
