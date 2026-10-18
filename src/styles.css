@@ -24,6 +24,46 @@
 .cgu-access-note { margin: -4px 0 16px; padding: 10px 12px; border-radius: 5px; background: #f6efdd; color: #877044; font-size: 10px; line-height: 1.9; }
 .reasoning-field { margin-top: 18px; }
 .reasoning-field .full-input { margin-top: 0; }
+.group-summary-button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid #d8cfea; border-radius: 4px; background: #f0eaf8; color: #74608f; font-size: 10px; white-space: nowrap; }
+.group-summary-button:hover:not(:disabled) { background: #e6dcf3; }
+.group-ai-progress { display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-bottom: 1px solid #ded4ec; background: #f3eef9; color: #776191; font-size: 11px; flex-shrink: 0; }
+.group-ai-progress button { margin-left: auto; color: #776191; font-size: 10px; text-decoration: underline; }
+.group-summary-preview { padding: 24px 28px; }
+.group-summary-heading { display: flex; align-items: center; gap: 12px; color: #8a72a8; margin-bottom: 18px; }
+.group-summary-heading strong { font-size: 13px; font-weight: 500; }
+.group-summary-heading p { font-size: 10px; color: #90977f; margin-top: 6px; line-height: 1.8; }
+.group-preview-sources { list-style: none; padding: 0; margin: 0 0 20px; max-height: 220px; overflow: auto; border: 1px solid #e3deeb; border-radius: 6px; }
+.group-preview-sources li { display: flex; align-items: flex-start; gap: 11px; padding: 11px 13px; border-bottom: 1px solid #eeebf2; }
+.group-preview-sources li:last-child { border-bottom: 0; }
+.group-preview-sources b, .group-preview-relations li > b { font-size: 9px; color: #8c78a3; background: #eee8f5; border-radius: 3px; padding: 3px 5px; flex-shrink: 0; font-weight: 500; }
+.group-preview-sources strong { font-size: 11px; font-weight: 500; color: #6b6178; overflow-wrap: anywhere; }
+.group-preview-sources p { font-size: 10px; line-height: 1.8; color: #96998b; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.group-preview-relations { margin-bottom: 20px; }
+.group-preview-relations h3 { font-size: 11px; font-weight: 500; color: #736184; margin-bottom: 10px; }
+.group-preview-relations ul { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow: auto; }
+.group-preview-relations li { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; font-size: 10px; color: #83758e; }
+.group-preview-relations li strong { font-weight: 500; border: 1px solid #e2d9eb; padding: 2px 6px; border-radius: 3px; }
+.group-preview-relations li p { flex-basis: 100%; margin-left: 32px; line-height: 1.7; overflow-wrap: anywhere; }
+.note-card.group-summary-note { border: 1px solid #d5c7e6; border-top: 4px solid #9c86c4; border-radius: 11px; background: linear-gradient(135deg, #f5f0fc 0%, #fcfaff 55%); box-shadow: 0 5px 18px #79609418; }
+.group-summary-note .note-header { padding: 10px 13px 6px; border-radius: 7px 7px 0 0; background: #e9dff250; }
+.group-summary-note .note-kind { color: #84669f; letter-spacing: 1px; }
+.group-summary-note .note-title { color: #665078; font-size: 14px; }
+.group-summary-note.selected { box-shadow: 0 0 0 1.5px #a68bc3, 0 6px 22px #79609420; }
+.group-note-sources { padding: 0 15px 12px; }
+.group-note-sources > p { color: #9a85af; font-size: 9px; margin-bottom: 8px; }
+.group-note-sources > div { display: flex; flex-wrap: wrap; gap: 5px; max-height: 92px; overflow: auto; }
+.group-note-sources button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px; border: 1px solid #e1d6ec; border-radius: 4px; background: #f4eefb; color: #8b74a1; font-size: 9px; max-width: 100%; }
+.group-note-sources button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.group-note-sources button b { font-weight: 500; color: #73578e; }
+.group-summary-note .note-tabs { border-color: #e5dcee; }
+.group-summary-note .note-tabs button.active { color: #80639a; }
+.group-summary-note .note-tabs button.active:after { background: #a38bbe; }
+.group-summary-note .note-content { color: #75657f; max-height: 320px; }
+.group-summary-note .note-footer { border-color: #e5dcee; }
+.group-summary-note .note-ai-actions > button { color: #8a6da4; }
+.group-summary-note .react-flow__handle { background: #a48abd; }
+@media (max-width: 1200px) { .group-summary-button { font-size: 9px; padding: 5px; gap: 3px; } }
+@media (max-width: 700px) { .group-summary-preview { padding: 20px; } }
 @media (max-width: 950px) { .toolbar-collapsed .library { top: 48px; } }
 @media (max-width: 700px) {
   .toolbar-toggle { width: 29px; padding: 4px; }

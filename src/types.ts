@@ -23,16 +23,22 @@ export interface AIResult {
 }
 export interface Note {
   id: string; documentId?: string; highlightId?: string;
-  type: 'highlight-note' | 'manual-note' | 'document-summary';
+  type: 'highlight-note' | 'manual-note' | 'document-summary' | 'group-summary';
   title: string; originalText: string; translation?: AIResult; summary?: AIResult;
   userNotes: string; tags: string[]; position: Point; width: number;
   collapsed: boolean; hidden: boolean; color: Color; updatedAt: string;
+  groupSummary?: GroupSummaryProvenance;
 }
 export const relations = ['相關', '支持', '對比', '延伸', '待驗證'] as const;
 export interface Relation {
   id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string;
   relationType: typeof relations[number]; label: string; directed: boolean;
   createdBy: 'user'; createdAt: string; updatedAt: string;
+}
+export interface GroupSummaryProvenance {
+  capturedAt: string;
+  sources: { noteId: string; title: string }[];
+  relations: Pick<Relation, 'id' | 'source' | 'target' | 'relationType' | 'label' | 'directed'>[];
 }
 export interface Chunk { text: string; startPage: number; endPage: number }
 export interface SummaryJob {

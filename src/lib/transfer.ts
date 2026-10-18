@@ -3,13 +3,15 @@ import { z } from 'zod';
 import { db } from './db';
 import { sha256, resetPdfCache } from './pdf';
 import { flushSave, useApp, toast } from '../store';
-import { now, reasoningEfforts, type Workspace } from '../types';
+import { now, reasoningEfforts, relations, type Workspace } from '../types';
 
 const str = z.string().max(2_000_000); const id = z.string().min(1).max(100).regex(/^[\w-]+$/);
 const color = z.enum(['yellow', 'green', 'pink', 'blue']); const provider = z.enum(['openai', 'gemini', 'cgu']);
 const reasoningEffort = z.enum(reasoningEfforts).optional();
 const point = z.object({ x: z.number().finite().min(-1e7).max(1e7), y: z.number().finite().min(-1e7).max(1e7) });
 const ai = z.object({ text: str, provider, model: z.string().max(200), reasoningEffort, createdAt: z.string().max(100), usage: z.number().nonnegative().optional() });
+const groupSummary = z.object({ capturedAt: z.string().max(100), sources: z.array(z.object({ noteId: id, title: z.string().max(1000) })).min(2).max(10000),
+  relations: z.array(z.object({ id, source: id, target: id, relationType: z.enum(relations), label: z.string().max(1000), directed: z.boolean() })).min(1).max(30000) });
 // Explicit allowlists also strip accidental secret fields from untrusted imports/exports.
 export const workspaceSchema = z.object({
   schemaVersion: z.literal(1), id, title: z.string().max(500), activeDocumentId: id.optional(), updatedAt: z.string().max(100),
@@ -19,8 +21,8 @@ export const workspaceSchema = z.object({
     rawText: str.optional(), textQuoteHash: z.string().max(100), textRange: z.object({ start: z.number().int().nonnegative(), end: z.number().int().nonnegative() }),
     quads: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(0).max(1), height: z.number().min(0).max(1) })).max(10000),
     coordinateSystem: z.literal('normalized'), rotation: z.number(), color, status: z.enum(['resolved', 'unresolved']), schemaVersion: z.literal(1), createdAt: z.string().max(100), updatedAt: z.string().max(100) })).max(10000),
-  notes: z.array(z.object({ id, documentId: id.optional(), highlightId: id.optional(), type: z.enum(['highlight-note', 'manual-note', 'document-summary']), title: z.string().max(1000), originalText: str,
-    translation: ai.optional(), summary: ai.optional(), userNotes: str, tags: z.array(z.string().max(200)).max(100), position: point, width: z.number().min(200).max(1200), collapsed: z.boolean(), hidden: z.boolean(), color, updatedAt: z.string().max(100) })).max(10000),
+  notes: z.array(z.object({ id, documentId: id.optional(), highlightId: id.optional(), type: z.enum(['highlight-note', 'manual-note', 'document-summary', 'group-summary']), title: z.string().max(1000), originalText: str,
+    translation: ai.optional(), summary: ai.optional(), groupSummary: groupSummary.optional(), userNotes: str, tags: z.array(z.string().max(200)).max(100), position: point, width: z.number().min(200).max(1200), collapsed: z.boolean(), hidden: z.boolean(), color, updatedAt: z.string().max(100) })).max(10000),
   edges: z.array(z.object({ id, source: id, target: id, sourceHandle: z.string().max(100).optional(), targetHandle: z.string().max(100).optional(), relationType: z.enum(['相關', '支持', '對比', '延伸', '待驗證']), label: z.string().max(1000), directed: z.boolean(), createdBy: z.literal('user'), createdAt: z.string().max(100), updatedAt: z.string().max(100) })).max(30000),
   jobs: z.array(z.object({ id, documentId: id, provider, model: z.string().max(200), reasoningEffort, chunks: z.array(z.object({ text: str, startPage: z.number().int().min(1), endPage: z.number().int().min(1) })), results: z.array(ai.nullable()), status: z.enum(['paused', 'running', 'failed', 'complete']), error: str.optional(), resultNoteId: id.optional(), createdAt: z.string().max(100) })).max(1000),
 });
@@ -35,6 +37,14 @@ export function validateWorkspace(value: unknown): Workspace {
     if (!doc || !n || n.highlightId !== h.id || n.documentId !== doc.id || h.pageIndex >= doc.pageCount || h.displayPage !== h.pageIndex + 1 || h.textRange.start >= h.textRange.end) throw new Error('標記與來源文件／便條的關係不完整。');
   }
   for (const n of w.notes) if ((n.documentId && !docs.has(n.documentId)) || (n.highlightId && !highlights.has(n.highlightId))) throw new Error('便條來源不存在。');
+  for (const n of w.notes) {
+    if (n.type === 'group-summary' && !n.groupSummary) throw new Error('關聯摘要缺少來源快照。');
+    if (!n.groupSummary) continue;
+    const sourceIds = new Set(n.groupSummary.sources.map(s => s.noteId));
+    // Historical references remain valid when the user later deletes a source note/edge.
+    if (sourceIds.size !== n.groupSummary.sources.length || sourceIds.has(n.id) || new Set(n.groupSummary.relations.map(e => e.id)).size !== n.groupSummary.relations.length
+      || n.groupSummary.relations.some(e => e.source === e.target || !sourceIds.has(e.source) || !sourceIds.has(e.target))) throw new Error('關聯摘要的來源快照關係無效。');
+  }
   for (const e of w.edges) if (!notes.has(e.source) || !notes.has(e.target)) throw new Error('關係連線指向不存在的便條。');
   for (const j of w.jobs) {
     const doc = docs.get(j.documentId);
@@ -56,7 +66,8 @@ export function exportMarkdown() {
   for (const n of w.notes) {
     const paper = w.documents.find(d => d.id === n.documentId); const h = w.highlights.find(h => h.id === n.highlightId);
     lines.push(`## ${n.title}`, '', `便條 ID：${n.id}`, ...(paper ? [`來源：${paper.name}${h ? ` · p. ${h.displayPage}` : ' · 全文'}`] : []), ...(n.tags.length ? [`標籤：${n.tags.join('、')}`] : []), '');
-    if (n.originalText) lines.push('### 原文', '', ...n.originalText.split('\n').map(l => `> ${l}`), '');
+    if (n.groupSummary) lines.push('類型：AI 關聯整合', `來源快照時間：${n.groupSummary.capturedAt}`, ...n.groupSummary.sources.map((s, i) => `- [N${i + 1}] ${s.title}（便條 ID：${s.noteId}）`), '');
+    if (n.originalText) lines.push(n.type === 'group-summary' ? '### 整合來源快照（含連線屬性）' : '### 原文', '', ...n.originalText.split('\n').map(l => `> ${l}`), '');
     if (n.translation) lines.push('### 翻譯', '', n.translation.text, '', `模型：${n.translation.provider} / ${n.translation.model}${n.translation.reasoningEffort ? ` · reasoning: ${n.translation.reasoningEffort}` : ''} · ${n.translation.createdAt}`, '');
     if (n.summary) lines.push('### AI 摘要（需核對原文）', '', n.summary.text, '', `模型：${n.summary.provider} / ${n.summary.model}${n.summary.reasoningEffort ? ` · reasoning: ${n.summary.reasoningEffort}` : ''} · ${n.summary.createdAt}`, '');
     if (n.userNotes) lines.push('### 我的筆記', '', n.userNotes, '');

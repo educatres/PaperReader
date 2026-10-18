@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { useApp, patchNote, createNote, toast } from '../store';
+import { useApp, patchNote, createNote, nextPosition, toast } from '../store';
 import { now, uid, type AIResult, type Chunk, type Provider, type ReasoningEffort, type SummaryJob } from '../types';
+import { groupSummaryInstruction, type GroupSummaryPlan } from './groupSummary';
 
 // Secrets have no persistence path. Never add these to a Zustand, database or export record.
 const sessionKeys = new Map<Provider, string>();
@@ -111,10 +112,33 @@ export function chunkDocument(pages: string[], limit = 6500): Chunk[] {
 interface AIState {
   running: Record<string, string>; errors: Record<string, string>;
   full?: { jobId: string; completed: number; total: number; phase: string };
+  group?: { taskId: string; sourceCount: number };
 }
 export const useAI = create<AIState>(() => ({ running: {}, errors: {} }));
 const controllers = new Map<string, AbortController>();
 export function cancelTask(id: string) { controllers.get(id)?.abort(); }
+export async function runGroupAI(plan: GroupSummaryPlan) {
+  if (useAI.getState().group) return;
+  const { provider, models, reasoningEffort } = useApp.getState().preferences;
+  if (!hasKey(provider) || !models[provider]) { useApp.setState({ settingsOpen: true }); toast('請先設定你自己的 API key 與模型', 'error'); return; }
+  const taskId = uid(); const controller = new AbortController(); controllers.set(taskId, controller);
+  // Capture exactly what was shown in the confirmation, even if sources change during the request.
+  const snapshot = structuredClone(plan);
+  useAI.setState(s => ({ group: { taskId, sourceCount: snapshot.provenance.sources.length }, running: { ...s.running, [taskId]: '關聯摘要中' } }));
+  try {
+    const result = await generate(provider, models[provider], groupSummaryInstruction, snapshot.input, controller.signal, reasoningEffort);
+    if (controller.signal.aborted) throw new Error('已取消關聯摘要。');
+    const notes = useApp.getState().workspace.notes;
+    const sources = snapshot.provenance.sources.map(source => notes.find(n => n.id === source.noteId));
+    if (sources.some(n => !n)) throw new Error('來源便條已移除，請重新選擇群組後再摘要。');
+    const right = Math.max(...sources.map(n => n!.position.x + n!.width)) + 70;
+    createNote({ type: 'group-summary', title: snapshot.title, originalText: snapshot.sourceText, summary: result,
+      groupSummary: snapshot.provenance, tags: ['關聯摘要'], color: 'blue', width: 380,
+      position: nextPosition({ x: right, y: sources[0]!.position.y }) });
+    toast(`已將 ${sources.length} 張關聯便條整合為紫色摘要便條`);
+  } catch (e) { toast((e as Error).message, 'error'); }
+  finally { controllers.delete(taskId); useAI.setState(s => { const running = { ...s.running }; delete running[taskId]; return { group: undefined, running }; }); }
+}
 export async function runNoteAI(noteId: string, type: 'translation' | 'summary') {
   const state = useApp.getState(); const note = state.workspace.notes.find(n => n.id === noteId);
   if (!note || useAI.getState().running[noteId]) return;

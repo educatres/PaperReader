@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, MiniMap, useReactFlow, applyNodeChanges, ConnectionMode, MarkerType, type Connection, type Edge, type OnNodesChange, type OnEdgesChange, type Viewport } from '@xyflow/react';
-import { Plus, Search, ZoomIn, ZoomOut, Maximize, Undo2, Redo2, Map, Network, X, ArrowRight, Eye, Trash2 } from 'lucide-react';
+import { Plus, Search, ZoomIn, ZoomOut, Maximize, Undo2, Redo2, Map, Network, X, ArrowRight, Eye, Trash2, Sparkles, LoaderCircle } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
 import { useApp, createNote, deleteNotes, nextPosition, toast } from '../store';
 import { uid, now, colors, relations, type Relation } from '../types';
 import { NoteNode, type ResearchNode } from './NoteNode';
 import { Modal } from './Modal';
+import { GroupSummaryDialog } from './GroupSummaryDialog';
+import { useAI, cancelTask } from '../lib/ai';
+import { connectedGroup } from '../lib/groupSummary';
 
 const nodeTypes = { researchNote: NoteNode };
 function EdgeEditor({ edge, close }: { edge: Relation; close: () => void }) {
@@ -19,7 +22,8 @@ function EdgeEditor({ edge, close }: { edge: Relation; close: () => void }) {
   </Modal>;
 }
 function CanvasInner() {
-  const { workspace, focusNoteId, selectedNoteId, history, future } = useApp();
+  const { workspace, focusNoteId, selectedNoteId, history, future, groupSummaryAnchorId } = useApp();
+  const groupTask = useAI(s => s.group);
   const [nodes, setNodes] = useState<ResearchNode[]>([]); const [query, setQuery] = useState('');
   const [miniMap, setMiniMap] = useState(false); const [editEdgeId, setEditEdgeId] = useState<string>();
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]); const [showHidden, setShowHidden] = useState(false);
@@ -72,9 +76,11 @@ function CanvasInner() {
   }
   function saveViewport(v: Viewport) { useApp.getState().edit(w => { w.viewport = v; }, false); }
   const visibleCount = workspace.notes.filter(n => !n.hidden).length;
+  const selectedGroup = useMemo(() => connectedGroup(workspace, selectedNoteId), [workspace, selectedNoteId]);
   return <section className="board-pane" aria-label="研究白板"><div className="pane-heading"><div className="eyebrow"><span className="section-dot terracotta" />知識白板<span className="small-label">CONNECT</span><span className="count-badge">{visibleCount}</span></div>
-    <div className="board-heading-actions"><button className={`icon-button ${showHidden ? 'active' : ''}`} onClick={() => setShowHidden(!showHidden)} title="顯示或隱藏已收起的卡片" aria-label="顯示隱藏便條"><Eye size={16} /></button><button className="add-note-button" onClick={add}><Plus size={15} />新增便條</button></div></div>
+    <div className="board-heading-actions"><button className={`icon-button ${showHidden ? 'active' : ''}`} onClick={() => setShowHidden(!showHidden)} title="顯示或隱藏已收起的卡片" aria-label="顯示隱藏便條"><Eye size={16} /></button><button className="group-summary-button" disabled={selectedGroup.notes.length < 2 || !!groupTask} title={selectedGroup.notes.length < 2 ? '先點選一張已連線的便條' : `整合這組 ${selectedGroup.notes.length} 張便條`} onClick={() => useApp.setState({ groupSummaryAnchorId: selectedNoteId })}><Sparkles size={14} /><span>關聯摘要</span></button><button className="add-note-button" onClick={add}><Plus size={15} />新增便條</button></div></div>
     <div className="board-search"><Search size={15} /><input placeholder="尋找想法、原文或 #標籤" aria-label="搜尋便條" value={query} onChange={e => setQuery(e.target.value)} />{query && <><span>{matches.size} 張</span><button className="icon-button" onClick={() => setQuery('')} aria-label="清除便條搜尋"><X size={14} /></button><button className="icon-button" title="定位搜尋結果" aria-label="定位搜尋結果" onClick={() => { if (matches.size) { const id = [...matches][0]; useApp.setState({ selectedNoteId: id, focusNoteId: id }); } }}><ArrowRight size={15} /></button></>}</div>
+    {groupTask && <div className="group-ai-progress" role="status"><LoaderCircle size={15} className="spin" /><span>正在整合 {groupTask.sourceCount} 張關聯便條…</span><button onClick={() => cancelTask(groupTask.taskId)}>取消整合</button></div>}
     <div className="research-canvas" onKeyDown={e => { const tag = (e.target as HTMLElement).tagName; if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || (e.target as HTMLElement).isContentEditable) return; if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelection(); } }} tabIndex={0}>
       <ReactFlow<ResearchNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={connect}
         onNodeClick={(_, n) => useApp.setState({ selectedNoteId: n.id })} onPaneClick={() => { useApp.setState({ selectedNoteId: undefined }); setSelectedEdges([]); setNodes(n => n.map(x => ({ ...x, selected: false }))); }}
@@ -86,13 +92,14 @@ function CanvasInner() {
         connectionMode={ConnectionMode.Loose} deleteKeyCode={null} selectionKeyCode="Shift" multiSelectionKeyCode="Shift" panOnScroll selectionOnDrag={false}
         proOptions={{ hideAttribution: false }} aria-label="無邊際研究白板">
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.1} color="#c8d0c4" />
-        {miniMap && <MiniMap nodeColor={n => colors[(n as ResearchNode).data.note.color]} maskColor="rgba(237,240,232,.7)" pannable zoomable position="bottom-right" />}
+        {miniMap && <MiniMap nodeColor={n => (n as ResearchNode).data.note.type === 'group-summary' ? '#a493c5' : colors[(n as ResearchNode).data.note.color]} maskColor="rgba(237,240,232,.7)" pannable zoomable position="bottom-right" />}
       </ReactFlow>
       {!visibleCount && <div className="board-empty"><div className="empty-network"><Network size={35} /></div><h3>讓想法，有跡可循。</h3><p>在左側標記一段文字，<br />它就會成為這裡的一張便條。</p><button className="text-button" onClick={add}><Plus size={14} />或先記下一個想法</button><div className="empty-board-line" /><span>拖曳整理 · 連線思考 · 隨時回到原文</span></div>}
       <div className="canvas-tools"><button className="icon-button" title="復原 Ctrl+Z" aria-label="復原" disabled={!history.length} onClick={() => useApp.getState().undo()}><Undo2 size={16} /></button><button className="icon-button" title="重做 Ctrl+Shift+Z" aria-label="重做" disabled={!future.length} onClick={() => useApp.getState().redo()}><Redo2 size={16} /></button><i /><button className="icon-button" aria-label="縮小白板" onClick={() => zoomOut()}><ZoomOut size={16} /></button><button className="icon-button" aria-label="放大白板" onClick={() => zoomIn()}><ZoomIn size={16} /></button><button className="icon-button" aria-label="白板全貌" title="回到全貌" onClick={() => { if (nodes.length) fitView({ padding: 0.15, duration: 350 }); else toast('標記文字或新增便條後，即可查看全貌'); }}><Maximize size={16} /></button><i /><button className={`icon-button ${miniMap ? 'active' : ''}`} aria-label="切換小地圖" onClick={() => setMiniMap(!miniMap)}><Map size={16} /></button></div>
       <span className="canvas-hint">Shift 多選 · 拖曳連接點建立關係</span>
     </div>
     {editEdge && <EdgeEditor key={editEdge.id} edge={editEdge} close={() => setEditEdgeId(undefined)} />}
+    {groupSummaryAnchorId && <GroupSummaryDialog anchorId={groupSummaryAnchorId} close={() => useApp.setState({ groupSummaryAnchorId: undefined })} />}
   </section>;
 }
 export function ResearchCanvas() { return <ReactFlowProvider><CanvasInner /></ReactFlowProvider>; }

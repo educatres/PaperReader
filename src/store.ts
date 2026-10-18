@@ -42,6 +42,7 @@ interface AppState {
   workspace: Workspace; preferences: Preferences; ready: boolean;
   saveStatus: 'saved' | 'saving' | 'error'; history: Workspace[]; future: Workspace[];
   selectedNoteId?: string; focusNoteId?: string; focusHighlightId?: string;
+  groupSummaryAnchorId?: string;
   sourceFocusSerial: number;
   documentEpoch: number;
   settingsOpen: boolean; helpOpen: boolean; exportOpen: boolean;

@@ -10,6 +10,7 @@ vi.mock('../src/lib/pdf', () => ({ sha256: async () => '', resetPdfCache: () => 
 const { validateWorkspace, readImport } = await import('../src/lib/transfer');
 const { chunkDocument, setKey, hasKey, clearAllKeys } = await import('../src/lib/ai');
 const { normalizeText } = await import('../src/lib/anchors');
+const { prepareGroupSummary } = await import('../src/lib/groupSummary');
 function manualNote(): Note { return { id: 'note-1', type: 'manual-note', title: 'Idea', originalText: '', userNotes: 'Evidence', tags: [], position: { x: 0, y: 0 }, width: 320, collapsed: false, hidden: false, color: 'yellow', updatedAt: now() }; }
 describe('portable data boundary', () => {
   it('strips unexpected secret fields and preserves the supported schema', () => {
@@ -37,6 +38,17 @@ describe('portable data boundary', () => {
     expect(restored.notes[0].summary).toEqual(result);
     delete w.jobs[0].reasoningEffort; delete w.notes[0].summary!.reasoningEffort;
     expect(validateWorkspace(w).jobs[0].reasoningEffort).toBeUndefined();
+  });
+  it('preserves group provenance in backups after source deletion and rejects corrupt snapshots', () => {
+    const w = emptyWorkspace(); w.notes = [manualNote(), { ...manualNote(), id: 'note-2', title: 'Another idea' }];
+    w.edges = [{ id: 'relation-1', source: 'note-1', target: 'note-2', relationType: '支持', label: 'Evidence supports the idea', directed: true, createdBy: 'user', createdAt: now(), updatedAt: now() }];
+    const plan = prepareGroupSummary(w, 'note-1');
+    w.notes.push({ ...manualNote(), id: 'group-1', type: 'group-summary', title: plan.title, originalText: plan.sourceText, groupSummary: plan.provenance });
+    w.notes = w.notes.filter(n => n.id !== 'note-2'); w.edges = [];
+    const parsed = validateWorkspace(JSON.parse(JSON.stringify(w)));
+    expect(parsed.notes[1].groupSummary).toEqual(plan.provenance);
+    parsed.notes[1].groupSummary!.relations[0].target = 'not-a-snapshot-source';
+    expect(() => validateWorkspace(parsed)).toThrow('來源快照關係無效');
   });
 });
 describe('source-preserving text chunking', () => {

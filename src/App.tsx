@@ -37,6 +37,7 @@ function HelpDialog({ close }: { close: () => void }) {
       ['04', '需要時，邀請 AI 協助', '貼上你自己的 OpenAI、CGU 或 Gemini key，選擇模型並測試。OpenAI／CGU 提供 gpt-6-luna、gpt-5.6-luna、自訂模型與低／中／高推理（預設中）。點翻譯／摘要才會傳送該便條原文；全文摘要需再次確認。'],
       ['05', '回查原文，定期備份', '便條右下箭頭可回到 PDF；點 PDF 標記可聚焦便條。JSON 不含 PDF，完整備份請使用研究封裝。AI 的來源範圍需人工核對。'],
       ['06', '留更多空間給閱讀', '文件列右側可隱藏最上方工具列，再按「展開工具列」即可叫回 AI 設定、全文摘要與匯出。收合狀態會保存在這個瀏覽器。'],
+      ['07', '整合一組相連的想法', '點選已連線的便條，再按白板上方「關聯摘要」，或便條選單的「摘要這組關聯」。會整理直接與間接連通、未隱藏的便條，參考關係類型、說明與箭頭方向。確認預覽後，產生一張紫色整合便條；N1 等來源按鈕可回查便條。來源變動後可按「再次整合」產生新摘要。'],
     ].map(([n, title, text]) => <div className="help-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></div>)}
       <div className="shortcut-row"><span><kbd>Ctrl / ⌘</kbd> + <kbd>O</kbd> 開啟 PDF</span><span><kbd>Ctrl / ⌘</kbd> + <kbd>Z</kbd> 復原</span><span><kbd>N</kbd> 新便條</span><span><kbd>?</kbd> 使用指南</span></div>
       <div className="data-disclosure"><strong>關於本機資料與金鑰</strong><p>GitHub Pages 版本的資料屬於目前網站來源，與 localhost 版本各自獨立。金鑰只存在分頁記憶體，重新整理後會清除，並直接用於向所選供應商驗證。網站沒有帳號、雲端同步或分析追蹤。清除瀏覽器網站資料會刪除研究內容；請定期匯出。掃描 PDF 的 OCR、原生 PDF 圖像理解尚未提供。</p></div>
