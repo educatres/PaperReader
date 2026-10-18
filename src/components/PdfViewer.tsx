@@ -1,0 +1,187 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
+import { ChevronLeft, ChevronRight, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle } from 'lucide-react';
+import 'pdfjs-dist/web/pdf_viewer.css';
+import { useApp, addHighlight, toast } from '../store';
+import { openPaper, sha256 } from '../lib/pdf';
+import { rangeQuads, resolveAnchor, selectionOffsets, normalizeText } from '../lib/anchors';
+import { colors, uid, now, type Color, type Highlight } from '../types';
+
+function PdfPage({ pdf, pageIndex, width, rotation, mode, highlights, focused, focusSerial, scrollRoot, onActivate, onFocusNote, onUnresolved }: {
+  pdf: PDFDocumentProxy; pageIndex: number; width: number; rotation: number; mode: string;
+  highlights: Highlight[]; focused?: string; focusSerial: number; scrollRoot: HTMLElement | null;
+  onActivate: (page: number) => void; onFocusNote: (id: string) => void; onUnresolved: (id: string) => void;
+}) {
+  const pageRef = useRef<HTMLDivElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false); const [ratio, setRatio] = useState(Math.SQRT2);
+  const [ready, setReady] = useState(false); const [error, setError] = useState('');
+  const [resolved, setResolved] = useState<Record<string, ReturnType<typeof rangeQuads>>>({});
+  useEffect(() => {
+    const element = pageRef.current!;
+    const observer = new IntersectionObserver(entries => { setVisible(entries[0].isIntersecting); }, { root: scrollRoot, rootMargin: '650px 0px' });
+    const active = new IntersectionObserver(entries => { if (entries[0].isIntersecting) onActivate(pageIndex + 1); }, { root: scrollRoot, rootMargin: '-15% 0px -65% 0px' });
+    observer.observe(element); active.observe(element); return () => { observer.disconnect(); active.disconnect(); };
+  }, [scrollRoot, pageIndex, onActivate]);
+  useEffect(() => {
+    if (!visible) { setReady(false); return; }
+    let cancelled = false; let render: { cancel: () => void } | undefined; let textLayer: TextLayer | undefined;
+    setReady(false); setError('');
+    (async () => {
+      const page = await pdf.getPage(pageIndex + 1); if (cancelled) return;
+      const rotate = (page.rotate + rotation) % 360;
+      const base = page.getViewport({ scale: 1, rotation: rotate });
+      const viewport = page.getViewport({ scale: width / base.width, rotation: rotate });
+      setRatio(viewport.height / viewport.width);
+      const container = pageRef.current!;
+      container.style.setProperty('--scale-factor', String(viewport.scale));
+      container.style.setProperty('--total-scale-factor', String(viewport.scale));
+      container.dataset.rotation = String(rotate);
+      const canvas = canvasRef.current!; const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(viewport.width * dpr); canvas.height = Math.floor(viewport.height * dpr);
+      const task = page.render({ canvas, viewport, transform: [dpr, 0, 0, dpr, 0, 0] }); render = task;
+      const content = await page.getTextContent(); if (cancelled) return;
+      const layer = layerRef.current!; layer.replaceChildren();
+      textLayer = new TextLayer({ textContentSource: content, container: layer, viewport });
+      await Promise.all([task.promise, textLayer.render()]);
+      if (!cancelled) setReady(true);
+    })().catch(e => { if (!cancelled && e?.name !== 'RenderingCancelledException' && e?.name !== 'AbortException') setError('這一頁載入失敗，請重新開啟 PDF。'); });
+    return () => { cancelled = true; render?.cancel(); textLayer?.cancel(); };
+  }, [pdf, pageIndex, width, rotation, visible]);
+  useLayoutEffect(() => {
+    if (!ready || !layerRef.current || !pageRef.current) return;
+    const result: Record<string, ReturnType<typeof rangeQuads>> = {};
+    for (const h of highlights) {
+      const quads = resolveAnchor(layerRef.current, pageRef.current, h);
+      if (quads?.length) result[h.id] = quads;
+      else {
+        const rotate = Number(pageRef.current.dataset.rotation || 0);
+        if (rotate === h.rotation) result[h.id] = h.quads;
+        else onUnresolved(h.id);
+      }
+    }
+    setResolved(result);
+  }, [ready, highlights, onUnresolved]);
+  useEffect(() => {
+    if (!ready || !focused) return;
+    const element = pageRef.current?.querySelector(`[data-highlight-id="${focused}"]`);
+    if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [ready, focused, focusSerial]);
+  return <div className={`pdf-page ${mode}`} ref={pageRef} style={{ width, height: width * ratio }} data-page-index={pageIndex} aria-label={`第 ${pageIndex + 1} 頁`}>
+    {visible ? <><canvas ref={canvasRef} /><div ref={layerRef} className="textLayer" />
+      <div className="highlight-layer">{highlights.flatMap(h => (resolved[h.id] || (rotation === 0 && h.rotation === 0 ? h.quads : [])).map((q, i) =>
+        <button key={`${h.id}-${i}`} data-highlight-id={h.id} title={`定位便條：${h.selectedText.slice(0, 50)}`} aria-label={`定位便條：${h.selectedText.slice(0, 30)}`}
+          className={`pdf-highlight ${focused === h.id ? 'focused' : ''}`} style={{ left: `${q.x * 100}%`, top: `${q.y * 100}%`, width: `${q.width * 100}%`, height: `${q.height * 100}%`, backgroundColor: colors[h.color] }}
+          onPointerDown={e => e.stopPropagation()} onClick={() => onFocusNote(h.noteId)} />))}</div>
+      {!ready && !error && <span className="page-loading"><LoaderCircle className="spin" size={22} /></span>}
+      {error && <span className="page-error">{error}</span>}</> : <span className="page-placeholder">{pageIndex + 1}</span>}
+    <span className="page-number-label">{pageIndex + 1}</span>
+  </div>;
+}
+
+export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: string }) {
+  const { workspace, preferences, focusHighlightId, sourceFocusSerial, documentEpoch } = useApp();
+  const paper = workspace.documents.find(d => d.id === workspace.activeDocumentId);
+  const [pdf, setPdf] = useState<PDFDocumentProxy>(); const [error, setError] = useState('');
+  const [mode, setMode] = useState<'highlight' | 'select'>('highlight'); const [color, setColor] = useState<Color>('yellow');
+  const [zoom, setZoom] = useState(1); const [rotation, setRotation] = useState(0);
+  const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(1); const [pageInput, setPageInput] = useState('1');
+  const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(''); const [hit, setHit] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null); const [root, setRoot] = useState<HTMLDivElement | null>(null);
+  const attachRoot = useCallback((element: HTMLDivElement | null) => { scrollRef.current = element; setRoot(element); }, []);
+  const lastSelection = useRef('');
+  useEffect(() => { setPdf(undefined); setError(''); setZoom(1); setRotation(0); setQuery(''); let cancelled = false;
+    if (paper) openPaper(paper.id).then(doc => { if (!cancelled) setPdf(doc); }).catch(e => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [paper?.id, paper?.sha256, documentEpoch]);
+  useEffect(() => {
+    if (!root) return;
+    const resize = new ResizeObserver(e => setPaneWidth(e[0].contentRect.width)); resize.observe(root); return () => resize.disconnect();
+  }, [root]);
+  const goToPage = useCallback((n: number) => {
+    if (!paper) return;
+    const target = Math.max(1, Math.min(paper.pageCount, n));
+    scrollRef.current?.querySelector(`[data-page-index="${target - 1}"]`)?.scrollIntoView({ behavior: 'instant', block: 'start' });
+    setPage(target); setPageInput(String(target));
+  }, [paper]);
+  useEffect(() => { if (pdf && paper) { const h = useApp.getState().workspace.highlights.find(h => h.id === useApp.getState().focusHighlightId && h.documentId === paper.id); const timer = setTimeout(() => goToPage(h?.displayPage || preferences.lastPage[paper.id] || 1), 100); return () => clearTimeout(timer); } }, [pdf]); // saved reading position
+  const activate = useCallback((n: number) => { setPage(n); setPageInput(String(n)); }, []);
+  useEffect(() => {
+    if (!paper) return;
+    const timer = setTimeout(() => { const p = useApp.getState().preferences; useApp.getState().pref({ lastPage: { ...p.lastPage, [paper.id]: page } }); }, 350);
+    return () => clearTimeout(timer);
+  }, [page, paper?.id]);
+  useEffect(() => {
+    const h = workspace.highlights.find(h => h.id === focusHighlightId);
+    if (h && h.documentId === paper?.id && pdf) goToPage(h.displayPage);
+    else if (!focusHighlightId && sourceFocusSerial && pdf) goToPage(1);
+  }, [focusHighlightId, sourceFocusSerial, paper?.id, pdf]);
+  const focusNote = useCallback((id: string) => {
+    const note = useApp.getState().workspace.notes.find(n => n.id === id);
+    if (note?.hidden) useApp.getState().edit(w => { const n = w.notes.find(n => n.id === id); if (n) n.hidden = false; });
+    useApp.setState({ selectedNoteId: id, focusNoteId: id });
+  }, []);
+  const unresolved = useCallback((id: string) => {
+    const h = useApp.getState().workspace.highlights.find(h => h.id === id);
+    if (h?.status !== 'unresolved') { useApp.getState().edit(w => { const h = w.highlights.find(h => h.id === id); if (h) h.status = 'unresolved'; }, false); toast('部分標記無法還原，請回到原頁重新標註。', 'error'); }
+  }, []);
+  async function captureSelection() {
+    if (mode !== 'highlight' || !paper) return;
+    const selection = window.getSelection(); if (!selection || selection.isCollapsed || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0); const raw = range.toString(); if (!raw.trim()) return;
+    const start = range.startContainer.parentElement?.closest<HTMLElement>('.pdf-page');
+    const end = range.endContainer.parentElement?.closest<HTMLElement>('.pdf-page');
+    if (!start || !scrollRef.current?.contains(start)) return;
+    if (start !== end) { selection.removeAllRanges(); toast('跨頁選取請分頁標記，確保每個來源都能正確定位。', 'error'); return; }
+    const layer = start.querySelector<HTMLElement>('.textLayer');
+    if (!layer?.contains(range.startContainer) || !layer.contains(range.endContainer)) return;
+    const pageIndex = Number(start.dataset.pageIndex); const offsets = selectionOffsets(layer, range);
+    const key = `${paper.id}:${pageIndex}:${offsets.start}:${offsets.end}:${selection.toString()}`;
+    if (lastSelection.current === key) return;
+    const quads = rangeQuads(range, start); if (!quads.length) return;
+    lastSelection.current = key; setTimeout(() => { lastSelection.current = ''; }, 500);
+    const content = layer.textContent || ''; const timestamp = now();
+    const highlight: Highlight = { id: uid(), documentId: paper.id, noteId: uid(), pageIndex, displayPage: pageIndex + 1,
+      selectedText: raw, rawText: selection.toString() || raw, normalizedText: normalizeText(selection.toString() || raw), textRange: offsets, prefix: content.slice(Math.max(0, offsets.start - 48), offsets.start),
+      suffix: content.slice(offsets.end, offsets.end + 48), textQuoteHash: '', quads, coordinateSystem: 'normalized',
+      rotation: Number(start.dataset.rotation || 0), color, status: 'resolved', schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp };
+    selection.removeAllRanges();
+    highlight.textQuoteHash = await sha256(new TextEncoder().encode(raw).buffer);
+    addHighlight(highlight);
+  }
+  const hits = query.trim() && paper ? paper.pages.flatMap((text, i) => text.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()) ? [i + 1] : []) : [];
+  function jumpSearch(direction: number) { if (!hits.length) return; const next = (hit + direction + hits.length) % hits.length; setHit(next); goToPage(hits[next]); }
+  useEffect(() => { setHit(0); if (hits.length) goToPage(hits[0]); }, [query]);
+  const noText = paper && !paper.pages[page - 1]?.trim();
+  return <section className="pdf-pane" aria-label="PDF 閱讀器">
+    <div className="pane-heading"><div className="eyebrow"><span className="section-dot" />文獻閱讀 <span className="small-label">READ</span></div>
+      <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button></div>
+    {paper ? <>
+      <div className="pdf-toolbar">
+        <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
+          <button title="選取與複製文字" aria-label="選字模式" className={mode === 'select' ? 'active' : ''} onClick={() => setMode('select')}><MousePointer2 size={16} /></button></div>
+        <div className="color-palette">{(Object.keys(colors) as Color[]).map(c => <button key={c} className={`color-dot ${color === c ? 'active' : ''}`} style={{ background: colors[c] }} title={`${({ yellow: '黃色', green: '綠色', pink: '粉色', blue: '藍色' })[c]}標記`} aria-label={`${c} highlight`} onClick={() => { setColor(c); setMode('highlight'); }} />)}</div>
+        <div className="toolbar-divider" />
+        <button className="icon-button" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} aria-label="縮小 PDF"><ZoomOut size={16} /></button>
+        <span className="zoom-value">{Math.round(zoom * 100)}%</span>
+        <button className="icon-button" onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} aria-label="放大 PDF"><ZoomIn size={16} /></button>
+        <button className="icon-button optional-tool" onClick={() => setZoom(1)} aria-label="適合寬度" title="適合寬度"><Maximize size={15} /></button>
+        <button className="icon-button optional-tool" onClick={() => setRotation(r => (r + 90) % 360)} aria-label="旋轉 PDF" title="旋轉頁面"><RotateCw size={15} /></button>
+      </div>
+      {searchOpen && <div className="pdf-search"><Search size={15} /><input autoFocus placeholder="搜尋文獻中的文字…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') jumpSearch(e.shiftKey ? -1 : 1); }} aria-label="PDF 搜尋文字" />
+        <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
+      {noText && <div className="ocr-notice"><ScanText size={15} />這一頁需要 OCR 才能文字標註；仍可閱讀。</div>}
+      <div className={`pdf-scroll mode-${mode}`} ref={attachRoot} onPointerUp={() => { setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
+        {error ? <div className="empty-panel"><ScanText size={35} /><h3>無法開啟 PDF</h3><p>{error}</p><button className="primary-button" onClick={onImport}>重新匯入 PDF</button></div> : pdf ?
+          Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${i}`} pdf={pdf} pageIndex={i} width={Math.max(220, paneWidth - 64) * zoom} rotation={rotation} mode={mode}
+            highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
+          : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
+      </div>
+      <div className="pdf-bottom"><span className="muted"><Highlighter size={13} /> {mode === 'highlight' ? '選取文字，自動留下重點' : '選取文字以複製'}</span><div className="page-controls">
+        <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁"><ChevronLeft size={15} /></button>
+        <input value={pageInput} aria-label="頁碼" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
+        <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁"><ChevronRight size={15} /></button></div></div>
+    </> : <div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div>}
+    {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={25} /><p>{busy}</p></div>}
+  </section>;
+}

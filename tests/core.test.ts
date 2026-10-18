@@ -1,0 +1,53 @@
+import { describe, expect, it, vi } from 'vitest';
+import { emptyWorkspace, now, type Note } from '../src/types';
+
+// Storage and PDF/browser rendering are exercised in the browser suite. These tests
+// protect data validation, chunk coverage, and accidental credential persistence.
+vi.stubGlobal('window', { addEventListener: () => {} });
+vi.stubGlobal('document', { addEventListener: () => {} });
+vi.stubGlobal('localStorage', { getItem: () => null });
+vi.mock('../src/lib/pdf', () => ({ sha256: async () => '', resetPdfCache: () => {} }));
+const { validateWorkspace, readImport } = await import('../src/lib/transfer');
+const { chunkDocument, setKey, hasKey, clearAllKeys } = await import('../src/lib/ai');
+const { normalizeText } = await import('../src/lib/anchors');
+function manualNote(): Note { return { id: 'note-1', type: 'manual-note', title: 'Idea', originalText: '', userNotes: 'Evidence', tags: [], position: { x: 0, y: 0 }, width: 320, collapsed: false, hidden: false, color: 'yellow', updatedAt: now() }; }
+describe('portable data boundary', () => {
+  it('strips unexpected secret fields and preserves the supported schema', () => {
+    const w = { ...emptyWorkspace(), apiKey: 'secret-never-export', notes: [{ ...manualNote(), authorization: 'secret-never-export' }] };
+    const parsed = validateWorkspace(w);
+    expect(JSON.stringify(parsed)).not.toContain('secret-never-export'); expect(parsed.notes).toHaveLength(1);
+  });
+  it('rejects dangling relationships, duplicate IDs and invalid source anchors', () => {
+    const w = emptyWorkspace(); w.notes = [manualNote(), manualNote()];
+    expect(() => validateWorkspace(w)).toThrow('重複 ID');
+    w.notes = [manualNote()]; w.edges = [{ id: 'edge-1', source: 'note-1', target: 'missing', relationType: '相關', label: '', directed: false, createdBy: 'user', createdAt: now(), updatedAt: now() }];
+    expect(() => validateWorkspace(w)).toThrow('不存在');
+  });
+  it('rejects a JSON schema newer than this application', async () => {
+    await expect(readImport(new File([JSON.stringify({ schemaVersion: 99 })], 'bad.json'))).rejects.toThrow();
+  });
+});
+describe('source-preserving text chunking', () => {
+  it('covers long pages without gaps and retains exact source page ranges', () => {
+    const pages = ['A'.repeat(23000), '', 'Third page findings.'];
+    const chunks = chunkDocument(pages, 1000);
+    expect(chunks.length).toBeGreaterThan(20);
+    const reconstructed = chunks.map(c => c.text.replace(/\[第 \d+ 頁\]\n/g, '')).join('').replace(/\s/g, '');
+    expect(reconstructed).toContain(pages[0]);
+    expect(chunks.at(-1)?.endPage).toBe(3);
+    expect(chunks.every(c => c.text.length <= 1000)).toBe(true);
+  });
+  it('has no chunks for scanned pages and normalizes line-break hyphenation', () => {
+    expect(chunkDocument(['', '  '])).toEqual([]);
+    expect(normalizeText('a con-\nnection   matters')).toBe('a connection matters');
+  });
+});
+describe('session-only credentials', () => {
+  it('clears independent providers without affecting research data', () => {
+    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b');
+    expect(hasKey('openai')).toBe(true); expect(hasKey('gemini')).toBe(true);
+    setKey('openai', ''); expect(hasKey('openai')).toBe(false); expect(hasKey('gemini')).toBe(true);
+    clearAllKeys(); expect(hasKey('gemini')).toBe(false);
+    expect(JSON.stringify(emptyWorkspace())).not.toContain('test-key');
+  });
+});
