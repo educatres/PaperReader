@@ -15,6 +15,24 @@
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 
 /* Keep the document controls and the restore button available while reading. */
+.pdf-toolbar { overflow-x: auto; }
+.pdf-toolbar > * { flex-shrink: 0; }
+.screenshot-notice { display: flex; align-items: center; gap: 8px; padding: 9px 16px; background: #e8eff5; color: #54728b; font-size: 11px; line-height: 1.7; }
+.screenshot-notice > svg { flex-shrink: 0; }
+.screenshot-notice button { margin-left: auto; white-space: nowrap; font-size: 10px; text-decoration: underline; }
+.screenshot-selection { position: absolute; inset: 0; z-index: 5; cursor: crosshair; touch-action: none; user-select: none; overflow: hidden; }
+.screenshot-selection[aria-busy="true"] { cursor: progress; }
+.screenshot-rectangle { position: absolute; border: 2px solid #4c88b7; background: #689cc122; box-shadow: 0 0 0 9999px #263d522e; pointer-events: none; }
+.screenshot-saving { position: absolute; top: 12px; left: 12px; padding: 6px 12px; background: #f3f8ff; color: #54728b; border-radius: 4px; font-size: 12px; }
+.screenshot-source-region { position: absolute; z-index: 4; border: 2px dashed #4c88b7; background: #689cc118; pointer-events: none; }
+.screenshot-image { padding: 0 14px; }
+.screenshot-thumbnail { position: relative; display: block; width: 100%; background: #fff; border: 1px solid #d7e0e7; border-radius: 5px; overflow: hidden; }
+.screenshot-thumbnail img { display: block; width: 100%; height: auto; max-height: 200px; object-fit: contain; }
+.screenshot-thumbnail > span { display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 5px 8px; font-size: 9px; color: #627c91; background: #f0f5f8; }
+.screenshot-missing { border: 1px dashed #a9bac6; border-radius: 4px; padding: 14px; font-size: 11px; line-height: 1.8; color: #738697; }
+.screenshot-text-only { padding: 9px 15px 4px; font-size: 9px; color: #778b9b; }
+.screenshot-full { padding: 20px; overflow: auto; max-height: 70dvh; background: #e9eef2; }
+.screenshot-full img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .app-header[hidden] { display: none; }
 .toolbar-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 5px; flex-shrink: 0; min-height: 30px; padding: 5px 8px; border: 1px solid #dce3d1; border-radius: 5px; color: var(--green); font-size: 10px; white-space: nowrap; }
 .toolbar-toggle:hover { background: #e4ecdb; }

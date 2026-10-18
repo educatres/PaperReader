@@ -13,6 +13,20 @@ const { normalizeText } = await import('../src/lib/anchors');
 const { prepareGroupSummary } = await import('../src/lib/groupSummary');
 function manualNote(): Note { return { id: 'note-1', type: 'manual-note', title: 'Idea', originalText: '', userNotes: 'Evidence', tags: [], position: { x: 0, y: 0 }, width: 320, collapsed: false, hidden: false, color: 'yellow', updatedAt: now() }; }
 describe('portable data boundary', () => {
+  it('validates screenshot page, attachment consistency and bounded canonical coordinates', () => {
+    const w = emptyWorkspace();
+    w.documents = [{ id: 'pdf', name: 'Figure.pdf', sha256: 'a'.repeat(64), size: 10, pageCount: 2, pages: ['', ''], createdAt: now() }];
+    w.notes = [{ ...manualNote(), type: 'screenshot-note', documentId: 'pdf', screenshot: { assetId: 'png', sha256: 'b'.repeat(64), size: 150, width: 120, height: 90, pageIndex: 1, rotation: 270, region: { x: .2, y: .1, width: .4, height: .3 } } }];
+    expect(validateWorkspace(w).notes[0].screenshot).toEqual(w.notes[0].screenshot);
+    const badPage = structuredClone(w); badPage.notes[0].screenshot!.pageIndex = 2;
+    expect(() => validateWorkspace(badPage)).toThrow('截圖便條');
+    const badRegion = structuredClone(w); badRegion.notes[0].screenshot!.region.width = .9;
+    expect(() => validateWorkspace(badRegion)).toThrow();
+    const missing = structuredClone(w); delete missing.notes[0].screenshot;
+    expect(() => validateWorkspace(missing)).toThrow('截圖便條');
+    const conflict = structuredClone(w); conflict.notes.push({ ...structuredClone(w.notes[0]), id: 'other' }); conflict.notes[1].screenshot!.sha256 = 'c'.repeat(64);
+    expect(() => validateWorkspace(conflict)).toThrow('資料不一致');
+  });
   it('strips unexpected secret fields and preserves the supported schema', () => {
     const w = { ...emptyWorkspace(), apiKey: 'secret-never-export', notes: [{ ...manualNote(), authorization: 'secret-never-export' }] };
     const parsed = validateWorkspace(w);

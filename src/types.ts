@@ -21,13 +21,19 @@ export interface Highlight {
 export interface AIResult {
   text: string; provider: Provider; model: string; createdAt: string; usage?: number; reasoningEffort?: ReasoningEffort;
 }
+export interface Screenshot {
+  assetId: string; sha256: string; size: number; width: number; height: number;
+  pageIndex: number; region: Quad; rotation: number;
+}
+export interface ImageAsset { id: string; blob: Blob; sha256: string }
 export interface Note {
   id: string; documentId?: string; highlightId?: string;
-  type: 'highlight-note' | 'manual-note' | 'document-summary' | 'group-summary';
+  type: 'highlight-note' | 'manual-note' | 'document-summary' | 'group-summary' | 'screenshot-note';
   title: string; originalText: string; translation?: AIResult; summary?: AIResult;
   userNotes: string; tags: string[]; position: Point; width: number;
   collapsed: boolean; hidden: boolean; color: Color; updatedAt: string;
   groupSummary?: GroupSummaryProvenance;
+  screenshot?: Screenshot;
 }
 export const relations = ['相關', '支持', '對比', '延伸', '待驗證'] as const;
 export interface Relation {

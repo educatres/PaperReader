@@ -22,9 +22,9 @@ function ExportDialog({ close }: { close: () => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   return <Modal title="帶走你的研究" description="定期下載備份，讓研究成果多一份保障。" onClose={close}>
     <div className="export-options"><button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await exportPack(); toast('研究封裝已下載'); close(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>
-      <span className="export-icon primary">{busy ? <LoaderCircle className="spin" /> : <FileArchive size={24} />}</span><div><strong>完整研究封裝<span className="recommended">建議備份</span></strong><p>PDF、標記、便條與連線，完整還原到另一台電腦。</p><small>.researchpack · 可重新匯入</small></div><ArrowUpRight size={18} /></button>
+      <span className="export-icon primary">{busy ? <LoaderCircle className="spin" /> : <FileArchive size={24} />}</span><div><strong>完整研究封裝<span className="recommended">建議備份</span></strong><p>PDF、截圖圖片、標記、便條與連線，完整還原到另一台電腦。</p><small>.researchpack · 可重新匯入</small></div><ArrowUpRight size={18} /></button>
       <button disabled={busy} onClick={() => { exportMarkdown(); close(); }}><span className="export-icon"><NotebookPen size={24} /></span><div><strong>Markdown 研究筆記</strong><p>保留原文、頁碼、翻譯、筆記與人工關係。</p><small>.md · 適合寫作與整理</small></div><ArrowUpRight size={18} /></button>
-      <button disabled={busy} onClick={() => { exportJSON(); close(); }}><span className="export-icon"><Braces size={24} /></span><div><strong>JSON 註記資料</strong><p>結構化的筆記資料，不含 PDF 原檔。</p><small>.json · 可匯入，PDF 需另行附加</small></div><ArrowUpRight size={18} /></button>
+      <button disabled={busy} onClick={() => { exportJSON(); close(); }}><span className="export-icon"><Braces size={24} /></span><div><strong>JSON 註記資料</strong><p>保留文字與附件資訊，不含 PDF 原檔或截圖圖片。</p><small>.json · 完整圖片請使用研究封裝</small></div><ArrowUpRight size={18} /></button>
     </div>{error && <div className="inline-error export-error">{error}</div>}<div className="export-footnote"><LockKeyhole size={14} />所有匯出檔都不包含 API key。</div>
   </Modal>;
 }
@@ -38,6 +38,7 @@ function HelpDialog({ close }: { close: () => void }) {
       ['05', '回查原文，定期備份', '便條右下箭頭可回到 PDF；點 PDF 標記可聚焦便條。JSON 不含 PDF，完整備份請使用研究封裝。AI 的來源範圍需人工核對。'],
       ['06', '留更多空間給閱讀', '文件列右側可隱藏最上方工具列，再按「展開工具列」即可叫回 AI 設定、全文摘要與匯出。收合狀態會保存在這個瀏覽器。'],
       ['07', '整合一組相連的想法', '點選已連線的便條，再按白板上方「關聯摘要」，或便條選單的「摘要這組關聯」。會整理直接與間接連通、未隱藏的便條，參考關係類型、說明與箭頭方向。確認預覽後，產生一張紫色整合便條；N1 等來源按鈕可回查便條。來源變動後可按「再次整合」產生新摘要。'],
+      ['08', '框選圖表，留下自己的解讀', 'PDF 工具列選擇「截圖模式」，在單頁拖曳框選後放開，即建立圖片便條。Esc 可取消，過小的框選不會建立便條。點圖片可放大，點「輸入或貼上文字」可填寫內容；文字預設完全留白，不執行 OCR。單張與關聯 AI 摘要只使用便條文字，不傳送或分析圖片。完整研究封裝包含圖片，JSON 與 Markdown 不含圖片。'],
     ].map(([n, title, text]) => <div className="help-step" key={n}><b>{n}</b><div><h3>{title}</h3><p>{text}</p></div></div>)}
       <div className="shortcut-row"><span><kbd>Ctrl / ⌘</kbd> + <kbd>O</kbd> 開啟 PDF</span><span><kbd>Ctrl / ⌘</kbd> + <kbd>Z</kbd> 復原</span><span><kbd>N</kbd> 新便條</span><span><kbd>?</kbd> 使用指南</span></div>
       <div className="data-disclosure"><strong>關於本機資料與金鑰</strong><p>GitHub Pages 版本的資料屬於目前網站來源，與 localhost 版本各自獨立。金鑰只存在分頁記憶體，重新整理後會清除，並直接用於向所選供應商驗證。網站沒有帳號、雲端同步或分析追蹤。清除瀏覽器網站資料會刪除研究內容；請定期匯出。掃描 PDF 的 OCR、原生 PDF 圖像理解尚未提供。</p></div>
@@ -95,11 +96,12 @@ function AppContent() {
   async function clearWorkspace() {
     if (full || Object.keys(useAI.getState().running).length) { toast('請先取消執行中的 AI 任務。', 'error'); return; }
     if (!confirm('永久清除此網站在本機的所有 PDF、便條、連線與 API key？這無法復原，請先下載研究封裝備份。')) return;
+    useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
     await flushSave(); clearAllKeys();
     const next = emptyWorkspace();
-    await db.transaction('rw', db.workspaces, db.documents, async () => { await db.workspaces.clear(); await db.documents.clear(); await db.workspaces.put(next); });
+    await db.transaction('rw', db.workspaces, db.documents, db.assets, async () => { await db.workspaces.clear(); await db.documents.clear(); await db.assets.clear(); await db.workspaces.put(next); });
     resetPdfCache();
-    useApp.setState(s => ({ workspace: next, documentEpoch: s.documentEpoch + 1, history: [], future: [], selectedNoteId: undefined, focusNoteId: undefined, focusHighlightId: undefined })); setLibraryOpen(false); toast('本機研究資料與金鑰已清除');
+    useApp.setState(s => ({ workspace: next, documentEpoch: s.documentEpoch + 1, history: [], future: [], selectedNoteId: undefined, focusNoteId: undefined, focusHighlightId: undefined, focusScreenshotNoteId: undefined })); setLibraryOpen(false); toast('本機研究資料與金鑰已清除');
   }
   if (!ready) return <div className="app-loading"><BookOpen size={35} /><span>PaperReader</span><LoaderCircle className="spin" size={20} /></div>;
   return <div className={`app-shell${preferences.toolbarCollapsed ? ' toolbar-collapsed' : ''}`} onDragEnter={e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); dragDepth.current++; setDragging(true); } }} onDragLeave={e => { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) setDragging(false); }} onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); if (e.dataTransfer.files.length) void handleFiles([...e.dataTransfer.files]); }}>

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { db, loadWorkspace, saveWorkspace } from './lib/db';
-import { emptyWorkspace, now, uid, reasoningEfforts, type Workspace, type Preferences, type Note, type Highlight, type Paper, type Point } from './types';
+import { emptyWorkspace, now, uid, reasoningEfforts, type Workspace, type Preferences, type Note, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
 
 const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna' }, reasoningEffort: 'medium', toolbarCollapsed: false, split: 54, lastPage: {} };
 function readPreferences(): Preferences {
@@ -42,6 +42,7 @@ interface AppState {
   workspace: Workspace; preferences: Preferences; ready: boolean;
   saveStatus: 'saved' | 'saving' | 'error'; history: Workspace[]; future: Workspace[];
   selectedNoteId?: string; focusNoteId?: string; focusHighlightId?: string;
+  focusScreenshotNoteId?: string;
   groupSummaryAnchorId?: string;
   sourceFocusSerial: number;
   documentEpoch: number;
@@ -120,7 +121,17 @@ export function addHighlight(highlight: Highlight) {
 export function focusSource(note: Note) {
   if (!note.documentId) return;
   useApp.getState().edit(w => { w.activeDocumentId = note.documentId; }, false);
-  useApp.setState(s => ({ focusHighlightId: note.highlightId, sourceFocusSerial: s.sourceFocusSerial + 1, selectedNoteId: note.id }));
+  useApp.setState(s => ({ focusHighlightId: note.highlightId, focusScreenshotNoteId: note.screenshot ? note.id : undefined, sourceFocusSerial: s.sourceFocusSerial + 1, selectedNoteId: note.id }));
+}
+export async function addScreenshot(documentId: string, screenshot: Screenshot, asset: ImageAsset, epoch: number) {
+  const valid = () => useApp.getState().documentEpoch === epoch && useApp.getState().workspace.documents.some(d => d.id === documentId);
+  if (!valid()) return;
+  // Persist the Blob before adding a reference; quota failures create no blank card.
+  await db.assets.put(asset);
+  if (!valid()) { await db.assets.delete(asset.id); return; }
+  createNote({ type: 'screenshot-note', documentId, screenshot, title: `PDF 截圖 · p. ${screenshot.pageIndex + 1}`, originalText: '', userNotes: '', color: 'blue' });
+  await flushSave();
+  if (useApp.getState().saveStatus !== 'error') toast('截圖已加入白板；可自行輸入或貼上文字');
 }
 export async function addPaper(paper: Paper, blob: Blob) {
   await db.documents.put({ id: paper.id, blob });

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useApp, patchNote, createNote, nextPosition, toast } from '../store';
 import { now, uid, type AIResult, type Chunk, type Provider, type ReasoningEffort, type SummaryJob } from '../types';
 import { groupSummaryInstruction, type GroupSummaryPlan } from './groupSummary';
+import { singleNoteText } from './noteText';
 
 // Secrets have no persistence path. Never add these to a Zustand, database or export record.
 const sessionKeys = new Map<Provider, string>();
@@ -142,10 +143,10 @@ export async function runGroupAI(plan: GroupSummaryPlan) {
 export async function runNoteAI(noteId: string, type: 'translation' | 'summary') {
   const state = useApp.getState(); const note = state.workspace.notes.find(n => n.id === noteId);
   if (!note || useAI.getState().running[noteId]) return;
+  const source = singleNoteText(note);
+  if (!source.trim()) { toast('請先加入便條文字或研究筆記；圖片不會送交 AI 分析。', 'error'); return; }
   const { provider, models, reasoningEffort } = state.preferences;
   if (!hasKey(provider) || !models[provider]) { useApp.setState({ settingsOpen: true }); toast('請先設定你自己的 API key 與模型', 'error'); return; }
-  const source = note.originalText || note.userNotes;
-  if (!source.trim()) { toast('請先加入原文或研究筆記', 'error'); return; }
   const controller = new AbortController(); controllers.set(noteId, controller);
   useAI.setState(s => ({ running: { ...s.running, [noteId]: type === 'translation' ? '翻譯中' : '摘要中' }, errors: { ...s.errors, [noteId]: '' } }));
   try {
