@@ -127,3 +127,114 @@ test('older preferences retain custom models and adopt medium reasoning', async 
   await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('my-gemini');
 });
+
+test('stored keys display a fixed mask and clearing removes the active provider key and draft only', async ({ page }) => {
+  const auth: (string | undefined)[] = [];
+  await page.route('https://api.openai.com/v1/models', route => {
+    auth.push(route.request().headers().authorization);
+    return route.fulfill({ json: { data: [{ id: 'test-text-model' }] } });
+  });
+  await page.goto('./');
+  await page.getByRole('button', { name: '新增便條', exact: true }).click();
+  await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
+  const input = page.getByLabel('你的 API key');
+  const clear = page.getByRole('button', { name: '清除本機 API Key', exact: true });
+  await expect(clear).toBeDisabled();
+  for (const [provider, key] of [['OpenAI', 'openai-mask-test-secret'], ['CGU API', 'cgu-mask-test-secret'], ['Google Gemini', 'gemini-mask-test-secret']]) {
+    await page.getByRole('button', { name: provider, exact: true }).click();
+    await input.fill(key);
+    await page.getByRole('button', { name: '顯示 API key', exact: true }).click();
+    await expect(input).toHaveAttribute('type', 'text');
+    await page.getByRole('button', { name: '使用此金鑰', exact: true }).click();
+    await expect(input).toHaveValue('');
+    await expect(input).toHaveAttribute('placeholder', '***');
+    await expect(input).toHaveAttribute('type', 'password');
+    await expect(page.getByRole('button', { name: '顯示 API key', exact: true })).toBeDisabled();
+    await expect(clear).toBeEnabled();
+  }
+  await page.getByRole('button', { name: '完成', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
+  await expect(input).toHaveAttribute('placeholder', '***');
+  await input.fill('unsaved-replacement-secret');
+  await clear.click();
+  await expect(page.locator('.settings-message')).toContainText('已清除 Google Gemini 的本機 API Key 記憶');
+  await expect(input).toHaveValue('');
+  await expect(input).toHaveAttribute('placeholder', 'AIza…');
+  await expect(clear).toBeDisabled();
+  await expect(page.getByRole('button', { name: '取得模型清單', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'CGU API', exact: true }).click();
+  await expect(input).toHaveAttribute('placeholder', '***');
+  await page.getByRole('button', { name: 'OpenAI', exact: true }).click();
+  await expect(input).toHaveAttribute('placeholder', '***');
+  await page.getByRole('button', { name: '取得模型清單', exact: true }).click();
+  await expect(page.locator('.settings-message')).toContainText('已取得 1 個模型');
+  expect(auth).toEqual(['Bearer openai-mask-test-secret']);
+  const persisted = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+  expect(persisted).not.toContain('test-secret'); expect(persisted).not.toContain('replacement-secret');
+  await clear.click();
+  await expect(input).not.toHaveAccessibleName(/本分頁已設定/);
+  await expect(input).toHaveAttribute('placeholder', 'sk-…');
+  await page.getByRole('button', { name: '完成', exact: true }).click();
+  await expect(page.locator('.note-card')).toHaveCount(1);
+  await expect(page.locator('.save-status')).toContainText('已存於本機');
+  await page.reload();
+  await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
+  await page.getByRole('button', { name: 'CGU API', exact: true }).click();
+  await expect(input).not.toHaveAttribute('placeholder', '***');
+  await expect(clear).toBeDisabled();
+  await expect(page.locator('.note-card')).toHaveCount(1);
+});
+
+test('Gemini selects the preferred text model across pages, otherwise requires a choice and preserves it on fetch errors', async ({ page }) => {
+  let mode: 'preferred' | 'missing' | 'empty' | 'error' = 'preferred';
+  const modelCalls: string[] = []; const generated: { url: string; key?: string }[] = [];
+  const textModel = (id: string) => ({ name: `models/${id}`, displayName: id, supportedGenerationMethods: ['generateContent'] });
+  await page.route('https://generativelanguage.googleapis.com/v1beta/**', route => {
+    const req = route.request(); const url = new URL(req.url());
+    if (req.method() === 'POST') {
+      generated.push({ url: req.url(), key: req.headers()['x-goog-api-key'] });
+      return route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'OK' }] } }] } });
+    }
+    modelCalls.push(req.url());
+    if (mode === 'error') return route.fulfill({ status: 429, json: { error: { message: 'quota' } } });
+    if (mode === 'empty') return route.fulfill({ json: { models: [] } });
+    if (mode === 'missing') return route.fulfill({ json: { models: [textModel('gemini-other'), { name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['embedContent'] }] } });
+    return route.fulfill({ json: url.searchParams.has('pageToken') ? { models: [textModel('gemini-flash-lite-latest')] } : { models: [textModel('gemini-other')], nextPageToken: 'next-page' } });
+  });
+  await page.goto('./');
+  await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
+  await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
+  await page.getByLabel('你的 API key').fill('gemini-model-selection-test-secret');
+  await page.getByLabel('選擇模型').fill('previous-custom-model');
+  const fetchModels = page.getByRole('button', { name: '取得模型清單', exact: true });
+  await fetchModels.click();
+  await expect(page.locator('.settings-message')).toContainText('已預設選擇 gemini-flash-lite-latest');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gemini-flash-lite-latest');
+  await expect(page.getByLabel('模型選項')).toHaveValue('gemini-flash-lite-latest');
+  expect(modelCalls).toHaveLength(2); expect(modelCalls[1]).toContain('pageToken=next-page');
+  await page.getByRole('button', { name: /測試連線/ }).click();
+  await expect(page.locator('.settings-message')).toContainText('連線成功');
+  expect(generated).toEqual([{ url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent', key: 'gemini-model-selection-test-secret' }]);
+  mode = 'missing';
+  await fetchModels.click();
+  await expect(page.locator('.settings-message')).toContainText('請自行選擇模型');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('');
+  await expect(page.getByLabel('模型選項')).toHaveValue('');
+  await expect(page.getByRole('button', { name: /測試連線/ })).toBeDisabled();
+  await expect(page.getByLabel('模型選項').locator('option')).toHaveCount(2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('dialog').screenshot({ path: 'test-results/gemini-model-selection-mobile.png' });
+  expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.getByLabel('模型選項').selectOption('gemini-other');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gemini-other');
+  mode = 'error';
+  await fetchModels.click();
+  await expect(page.locator('.settings-message')).toContainText('429');
+  await expect(page.getByLabel('模型選項')).toHaveValue('gemini-other');
+  mode = 'empty';
+  await fetchModels.click();
+  await expect(page.locator('.settings-message')).toContainText('已取得 0 個模型');
+  await expect(page.getByLabel('模型選項')).toHaveValue('');
+  await expect(page.getByLabel('模型選項').locator('option')).toHaveCount(1);
+  expect(generated).toHaveLength(1);
+});

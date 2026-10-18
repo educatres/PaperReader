@@ -8,6 +8,7 @@ import { reasoningEfforts, reasoningLabels, type Provider, type ReasoningEffort 
 
 const modelCache: Partial<Record<Provider, ModelOption[]>> = {};
 const presets = ['gpt-6-luna', 'gpt-5.6-luna'];
+const preferredGeminiModel = 'gemini-flash-lite-latest';
 const keyLinks: Record<Provider, string> = { openai: 'https://platform.openai.com/api-keys', gemini: 'https://aistudio.google.com/api-keys', cgu: cguKeyPage };
 export function Settings({ close }: { close: () => void }) {
   const { preferences, pref } = useApp();
@@ -24,8 +25,13 @@ export function Settings({ close }: { close: () => void }) {
     return () => window.removeEventListener('pagehide', clearDrafts);
   }, []);
   const local = provider === 'cgu' && preferences.cguConnection === 'localhost';
-  const keyReady = hasKey(provider) || !!key.trim();
-  function applyDraftKey() { if (key.trim()) { setKey(provider, key); setDraftKey(''); } }
+  const storedKey = hasKey(provider);
+  const keyReady = storedKey || !!key.trim();
+  function applyDraftKey() { if (key.trim()) { setKey(provider, key); setDraftKey(''); setShow(false); } }
+  function clearKey() {
+    setKey(provider, ''); setDraftKey(''); setShow(false);
+    setMessage(`已清除 ${providerName(provider)} 的本機 API Key 記憶。`); setOk(true);
+  }
   function saveKey() {
     try { applyDraftKey(); setMessage('金鑰已暫存於分頁記憶體。請選擇模型並測試連線。'); setOk(true); }
     catch (e) { setOk(false); setMessage((e as Error).message); }
@@ -45,7 +51,16 @@ export function Settings({ close }: { close: () => void }) {
   const changeModel = (value: string) => pref({ models: { ...useApp.getState().preferences.models, [provider]: value } });
   async function fetchModels() {
     setBusy('models'); setMessage('');
-    try { applyDraftKey(); const result = await listModels(provider); modelCache[provider] = result; setModels(result); setOk(true); setMessage(`已取得 ${result.length} 個模型。清單可見不代表具備文字生成權限，請測試所選模型。`); }
+    try {
+      applyDraftKey(); const result = await listModels(provider); modelCache[provider] = result; setModels(result);
+      let selection = '';
+      if (provider === 'gemini') {
+        const available = result.some(m => m.id === preferredGeminiModel);
+        changeModel(available ? preferredGeminiModel : '');
+        selection = available ? `已預設選擇 ${preferredGeminiModel}。` : `清單未包含 ${preferredGeminiModel}，請自行選擇模型。`;
+      }
+      setOk(true); setMessage(`已取得 ${result.length} 個模型。${selection}清單可見不代表具備文字生成權限，請測試所選模型。`);
+    }
     catch (e) { setOk(false); setMessage((e as Error).message); }
     finally { setBusy(''); }
   }
@@ -78,12 +93,16 @@ export function Settings({ close }: { close: () => void }) {
       </section>}
       <div className="privacy-card"><ShieldCheck size={22} /><div><strong>金鑰只暫存在記憶體。</strong><p>不儲存至硬碟、localStorage、資料庫或 GitHub。重新整理或關閉分頁後，需重新輸入。{local ? '金鑰經本機助手的記憶體，以 HTTPS 傳給 CGU 驗證；助手不記錄或保存金鑰。' : '呼叫時以 HTTPS 傳給所選供應商驗證。'}</p></div></div>
       <label className="field-label" htmlFor="api-key">你的 API key <span>{hasKey(provider) ? <><Check size={12} />本分頁已設定</> : '尚未設定'}</span></label>
-      <div className="key-input"><KeyRound size={16} /><input id="api-key" autoComplete="off" spellCheck={false} type={show ? 'text' : 'password'} placeholder={hasKey(provider) ? '輸入新金鑰以更換…' : provider === 'gemini' ? 'AIza…' : provider === 'cgu' ? '貼上你的 CGU API key' : 'sk-…'} value={key} onChange={e => setDraftKey(e.target.value)} /><button className="icon-button" onClick={() => setShow(!show)} aria-label={show ? '隱藏 API key' : '顯示 API key'}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-      <div className="key-actions"><a href={keyLinks[provider]} target="_blank" rel="noreferrer">{provider === 'cgu' ? '啟用／取得 CGU API key' : `取得 ${providerName(provider)} API key`}<ExternalLink size={12} /></a><div>{hasKey(provider) && <button className="text-button danger" onClick={() => { setKey(provider, ''); setDraftKey(''); setMessage('已清除此分頁的金鑰。'); setOk(true); }} disabled={!!busy}><Trash2 size={13} />清除</button>}<button className="small-button" disabled={!key.trim() || !!busy} onClick={saveKey}>使用此金鑰</button></div></div>
+      <div className="key-input"><KeyRound size={16} /><input id="api-key" autoComplete="off" spellCheck={false} type={show ? 'text' : 'password'} placeholder={storedKey ? '***' : provider === 'gemini' ? 'AIza…' : provider === 'cgu' ? '貼上你的 CGU API key' : 'sk-…'} value={key} disabled={!!busy} onChange={e => setDraftKey(e.target.value)} aria-describedby={storedKey ? 'stored-key-help' : undefined} /><button className="icon-button" onClick={() => setShow(!show)} disabled={!key || !!busy} aria-label={show ? '隱藏 API key' : '顯示 API key'}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+      {storedKey && <p className="field-help" id="stored-key-help">*** 表示此供應商的金鑰已暫存於本分頁；輸入新金鑰可更換。</p>}
+      <div className="key-actions"><a href={keyLinks[provider]} target="_blank" rel="noreferrer">{provider === 'cgu' ? '啟用／取得 CGU API key' : `取得 ${providerName(provider)} API key`}<ExternalLink size={12} /></a><div><button className="text-button danger" onClick={clearKey} disabled={!keyReady || !!busy}><Trash2 size={13} />清除本機 API Key</button><button className="small-button" disabled={!key.trim() || !!busy} onClick={saveKey}>使用此金鑰</button></div></div>
       {provider === 'cgu' && <div className="cgu-verify"><button className="small-button" disabled={!keyReady || !!busy} onClick={() => void verify()}>{busy === 'verify' && <LoaderCircle size={13} className="spin" />}驗證 CGU 金鑰</button><p className="field-help">可貼上純金鑰、Bearer 金鑰或 Authorization: Bearer 金鑰。驗證只查詢 /models，不送出文字生成。</p></div>}
       <div className="settings-divider" />
       <div className="field-row"><label className="field-label" htmlFor="model-id">選擇模型</label><button className="text-button" disabled={!keyReady || !!busy} onClick={() => void fetchModels()}>{busy === 'models' ? <LoaderCircle size={13} className="spin" /> : <Wifi size={13} />}取得模型清單</button></div>
-      {provider !== 'gemini' && <select aria-label="模型選項" className="full-input" value={presets.includes(model) ? model : 'custom'} disabled={!!busy} onChange={e => { changeModel(e.target.value === 'custom' ? '' : e.target.value); if (e.target.value === 'custom') document.getElementById('model-id')?.focus(); }}>
+      {provider === 'gemini' ? <select aria-label="模型選項" className="full-input" value={model} disabled={!!busy} onChange={e => changeModel(e.target.value)}>
+        <option value="">請選擇模型</option>{model && !models.some(m => m.id === model) && <option value={model}>自訂：{model}</option>}
+        {models.map(m => <option key={m.id} value={m.id}>{m.label} · {m.id}</option>)}
+      </select> : <select aria-label="模型選項" className="full-input" value={presets.includes(model) ? model : 'custom'} disabled={!!busy} onChange={e => { changeModel(e.target.value === 'custom' ? '' : e.target.value); if (e.target.value === 'custom') document.getElementById('model-id')?.focus(); }}>
         {presets.map(id => <option key={id} value={id}>{id}</option>)}<option value="custom">自訂模型 ID</option>
       </select>}
       <input id="model-id" list="provider-models" value={model} onChange={e => changeModel(e.target.value.trim())} placeholder="輸入自訂模型 ID，或從取得的清單選擇" autoComplete="off" className="full-input" disabled={!!busy} />

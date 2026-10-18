@@ -101,3 +101,4 @@
 .bridge-setup .field-label { margin: 14px 0 0; }
 .bridge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
 .cgu-verify { margin-top: 14px; }
+.key-actions { flex-wrap: wrap; }

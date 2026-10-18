@@ -120,7 +120,7 @@ test('bad pairing, invalid pasted keys, CGU status errors and unavailable models
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('目前模型不在帳戶可用清單中');
   expect(calls.every(c => c.url.endsWith('/models'))).toBe(true);
-  await page.getByRole('button', { name: '清除', exact: true }).click();
+  await page.getByRole('button', { name: '清除本機 API Key', exact: true }).click();
   await expect(page.getByRole('button', { name: '驗證 CGU 金鑰', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '清除配對', exact: true }).click();
   await expect(page.getByRole('button', { name: '連接本機助手', exact: true })).toBeDisabled();
