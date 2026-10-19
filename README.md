@@ -1,5 +1,9 @@
 # PaperReader
 
+[![PaperReader：把論文讀成自己的知識。PDF 標記、AI 翻譯摘要、跨文獻知識白板與本機備份。](docs/poster/PaperReader_GitHub展示圖_2x1.png)](https://educatres.github.io/PaperReader/)
+
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh-hant)
+
 [開啟 PaperReader](https://educatres.github.io/PaperReader/) · [GitHub](https://github.com/educatres/PaperReader)
 
 [使用指引（PPTX，含範例操作截圖）](docs/PaperReader_使用指引.pptx) · [AI Agent 專案交接文件](交接文件.md)
@@ -193,3 +197,15 @@ public/           本機範例 PDF、圖示與建置時複製的 PDF.js 資源
 原始規劃見 `PDF_AI_Research_Canvas_系統規格書_v1.0.md`。本版部署於 GitHub Pages，金鑰只暫存記憶體；所有供應商由前端以 HTTPS 直接連線。
 
 介接參考：[OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[OpenAI Models](https://developers.openai.com/api/reference/resources/models/methods/list)、[Gemini generateContent](https://ai.google.dev/api/generate-content)、[Gemini Models](https://ai.google.dev/api/models)。第三方授權見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
+## 授權
+
+Copyright © 2026 [educatres](https://github.com/educatres)。除另有標示外，本專案的原創程式碼、文件與展示圖採用 [Creative Commons 姓名標示－非商業性 4.0 國際（CC BY-NC 4.0）授權](https://creativecommons.org/licenses/by-nc/4.0/deed.zh-hant)。
+
+- 可為非商業目的分享、重製及修改。
+- 使用時須適當標示作者、提供授權連結，並註明是否修改。
+- 商業使用須另行取得著作權人許可。
+
+建議標示方式：`PaperReader by educatres — CC BY-NC 4.0 — https://github.com/educatres/PaperReader`；若有修改，請另行註明。
+
+完整條款見 [LICENSE](LICENSE)。第三方套件、字型與其他另有授權的素材沿用各自的授權，詳見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。使用者匯入的 PDF 與其他內容，其權利仍屬原著作權人，不因使用本工具而改變。
