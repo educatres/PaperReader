@@ -1,11 +1,13 @@
+import { useEffect } from 'react';
 import { FileText, ShieldCheck, Sparkles } from 'lucide-react';
 import { Modal } from './Modal';
-import { useApp } from '../store';
+import { useApp, recoverSummaryJobs } from '../store';
 import { chunkDocument, hasKey, providerName, runDocumentAI, useCredentials } from '../lib/ai';
 import { reasoningLabels } from '../types';
 
 export function SummaryDialog({ close }: { close: () => void }) {
   const { workspace, preferences } = useApp(); useCredentials();
+  useEffect(() => { void recoverSummaryJobs(); }, []);
   const paper = workspace.documents.find(d => d.id === workspace.activeDocumentId);
   if (!paper) return null;
   const chunks = chunkDocument(paper.pages); const chars = paper.pages.join('').length;

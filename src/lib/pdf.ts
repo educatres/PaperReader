@@ -1,6 +1,6 @@
 import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { useApp, addPaper, toast } from '../store';
+import { useApp, addPaper, toast, notifyDocumentFiles } from '../store';
 import { db } from './db';
 import { uid, now } from '../types';
 
@@ -10,6 +10,8 @@ export function resetPdfCache() {
   const previous = [...cache.values()]; cache.clear();
   for (const doc of previous) void doc.then(pdf => pdf.loadingTask.destroy()).catch(() => {});
 }
+window.addEventListener('paperreader-reset', resetPdfCache);
+window.addEventListener('paperreader-files', resetPdfCache);
 export const pdfOptions = {
   cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`, cMapPacked: true,
   standardFontDataUrl: `${import.meta.env.BASE_URL}pdfjs/standard_fonts/`,
@@ -40,6 +42,7 @@ export async function importPdf(file: File, onProgress?: (message: string) => vo
       await db.documents.put({ id: existing.id, blob: file });
       cache.delete(`${existing.id}:${existing.sha256}`);
       useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
+      notifyDocumentFiles();
     }
     useApp.getState().edit(w => { w.activeDocumentId = existing.id; }, false);
     toast('這篇文獻已在研究空間，已為你開啟'); return existing;

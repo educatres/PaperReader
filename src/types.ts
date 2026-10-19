@@ -58,7 +58,7 @@ export interface Workspace {
   viewport: Viewport; updatedAt: string;
 }
 export interface Preferences {
-  provider: Provider; models: Record<Provider, string>; reasoningEffort: ReasoningEffort; toolbarCollapsed: boolean;
+  provider: Provider; models: Record<Provider, string>; reasoningEffort: ReasoningEffort; toolbarCollapsed: boolean; pdfCollapsed: boolean;
   split: number; lastPage: Record<string, number>;
 }
 export const colors: Record<Color, string> = {

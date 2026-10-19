@@ -5,11 +5,14 @@ import { emptyWorkspace, now, type Screenshot } from '../src/types';
 
 vi.stubGlobal('window', { addEventListener: () => {} });
 vi.stubGlobal('document', { addEventListener: () => {} });
-vi.stubGlobal('localStorage', { getItem: () => null });
+vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+vi.stubGlobal('sessionStorage', { getItem: () => null, setItem: () => {} });
+vi.stubGlobal('location', { search: '' });
+vi.stubGlobal('BroadcastChannel', undefined);
 const { db, loadWorkspace } = await import('../src/lib/db');
 const { useApp, addScreenshot, deleteNotes, flushSave } = await import('../src/store');
 
-it('upgrades v1 without losing PDFs; keeps undo images and reclaims expired ones; failed or stale captures create nothing', async () => {
+it('upgrades v1 without losing PDFs; opening another window keeps undo images; failed or stale captures create nothing', async () => {
   const legacy = new Dexie('PaperReader'); legacy.version(1).stores({ workspaces: 'id', documents: 'id' });
   const w = emptyWorkspace(); w.documents.push({ id: 'pdf', name: 'Legacy.pdf', sha256: 'a'.repeat(64), size: 6, pageCount: 1, pages: ['Legacy text'], createdAt: now() });
   await legacy.table('documents').put({ id: 'pdf', blob: new Blob(['legacy']) }); await legacy.table('workspaces').put(w); legacy.close();
@@ -24,10 +27,10 @@ it('upgrades v1 without losing PDFs; keeps undo images and reclaims expired ones
   useApp.getState().undo(); await flushSave(); expect(useApp.getState().workspace.notes[0].screenshot).toEqual(image);
   expect((await loadWorkspace())!.notes).toHaveLength(1); expect(await db.assets.count()).toBe(1);
   useApp.getState().redo(); await flushSave();
-  useApp.setState({ history: [], future: [] }); await loadWorkspace(); expect(await db.assets.count()).toBe(0);
-  await addScreenshot('pdf', image, asset, 99); expect(await db.assets.count()).toBe(0);
+  useApp.setState({ history: [], future: [] }); await loadWorkspace(); expect(await db.assets.count()).toBe(1);
+  await addScreenshot('pdf', image, asset, 99); expect(await db.assets.count()).toBe(1);
   const put = vi.spyOn(db.assets, 'put').mockRejectedValueOnce(new Error('QuotaExceededError'));
   await expect(addScreenshot('pdf', image, asset, 0)).rejects.toThrow('Quota');
-  expect(useApp.getState().workspace.notes).toHaveLength(0); expect(await db.assets.count()).toBe(0); put.mockRestore();
+  expect(useApp.getState().workspace.notes).toHaveLength(0); expect(await db.assets.count()).toBe(1); put.mockRestore();
   await db.delete();
 });

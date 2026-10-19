@@ -1,20 +1,32 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { Handle, Position, NodeResizer, type Node, type NodeProps } from '@xyflow/react';
 import { ArrowUpRight, ChevronDown, ChevronUp, Languages, Sparkles, Pencil, MoreHorizontal, Quote, X, Link2, FileText, Lightbulb, LoaderCircle, Layers3, Network, Image } from 'lucide-react';
 import { colors, type Note, type Paper, type Highlight } from '../types';
-import { useApp, patchNote, focusSource, deleteNotes } from '../store';
+import { useApp, patchNote, focusSource, deleteNotes, saveEntityDraft, preserveEntityDraft, getWorkspaceEpoch } from '../store';
 import { useAI, runNoteAI, cancelTask, providerName } from '../lib/ai';
 import { Modal } from './Modal';
 import { ScreenshotImage } from './ScreenshotImage';
 import { singleNoteText } from '../lib/noteText';
 
 export type ResearchNode = Node<{ note: Note; paper?: Paper; highlight?: Highlight }, 'researchNote'>;
+function draftValues(draft: Note, tags: string): Partial<Note> {
+  return { title: draft.title.trim() || '未命名便條', userNotes: draft.userNotes, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean).slice(0, 30), color: draft.color,
+    ...(draft.type === 'manual-note' || draft.type === 'screenshot-note' ? { originalText: draft.originalText } : {}), translation: draft.translation, summary: draft.summary };
+}
 function NoteEditor({ note, close }: { note: Note; close: () => void }) {
+  const [base] = useState(note);
+  const [epoch] = useState(getWorkspaceEpoch);
   const [draft, setDraft] = useState(note); const [tags, setTags] = useState(note.tags.join(', '));
   const editableText = note.type === 'manual-note' || note.type === 'screenshot-note';
-  return <Modal title="編輯研究便條" description="原文與你的解讀，各自留存。" onClose={close}>
-    <form className="editor-form" onSubmit={e => { e.preventDefault(); patchNote(note.id, { title: draft.title.trim() || '未命名便條', userNotes: draft.userNotes, tags: tags.split(/[,，]/).map(t => t.trim()).filter(Boolean).slice(0, 30), color: draft.color,
-      ...(editableText ? { originalText: draft.originalText } : {}), translation: draft.translation, summary: draft.summary }); close(); }}>
+  const latest = useRef({ draft, tags }); latest.current = { draft, tags };
+  const dismissed = useRef(false);
+  function finish() { dismissed.current = true; close(); }
+  useEffect(() => () => {
+    const live = useApp.getState().workspace.notes.find(n => n.id === base.id);
+    if (!dismissed.current && (!live || live.hidden)) void preserveEntityDraft('notes', base, draftValues(latest.current.draft, latest.current.tags), epoch);
+  }, [base, epoch]);
+  return <Modal title="編輯研究便條" description="原文與你的解讀，各自留存。" onClose={finish}>
+    <form className="editor-form" onSubmit={e => { e.preventDefault(); saveEntityDraft('notes', base, draftValues(draft, tags), epoch); finish(); }}>
       <label>便條標題<input autoFocus value={draft.title} maxLength={200} onChange={e => setDraft({ ...draft, title: e.target.value })} /></label>
       <label>{note.type === 'screenshot-note' ? '截圖便條文字（自行輸入或貼上）' : note.type === 'manual-note' ? '參考文字（選填）' : note.type === 'group-summary' ? '整合來源快照' : '來源原文'}<textarea rows={4} readOnly={!editableText} placeholder={note.type === 'screenshot-note' ? '輸入或貼上文字，AI 只讀取這些文字及你的筆記，不分析圖片。' : undefined} value={draft.originalText} onChange={e => setDraft({ ...draft, originalText: e.target.value })} /></label>
       <label>我的筆記<textarea rows={5} placeholder="這段話讓我想到…" value={draft.userNotes} onChange={e => setDraft({ ...draft, userNotes: e.target.value })} /></label>
@@ -22,7 +34,7 @@ function NoteEditor({ note, close }: { note: Note; close: () => void }) {
       {draft.summary && <label>AI 摘要（可修訂）<textarea rows={5} value={draft.summary.text} onChange={e => setDraft({ ...draft, summary: { ...draft.summary!, text: e.target.value } })} /></label>}
       <label>標籤<span className="label-hint">以逗號分隔</span><input value={tags} onChange={e => setTags(e.target.value)} placeholder="例如：研究方法, 值得延伸" /></label>
       {note.type !== 'group-summary' && <div className="field-row"><span>便條顏色</span><div className="color-palette">{(Object.keys(colors) as (keyof typeof colors)[]).map(c => <button type="button" aria-label={`${c} note`} key={c} className={`color-dot ${draft.color === c ? 'active' : ''}`} style={{ background: colors[c] }} onClick={() => setDraft({ ...draft, color: c })} />)}</div></div>}
-      <footer className="modal-actions"><button type="button" className="secondary-button" onClick={close}>取消</button><button className="primary-button" type="submit">儲存便條</button></footer>
+      <footer className="modal-actions"><button type="button" className="secondary-button" onClick={finish}>取消</button><button className="primary-button" type="submit">儲存便條</button></footer>
     </form>
   </Modal>;
 }

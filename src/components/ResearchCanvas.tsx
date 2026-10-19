@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlow, ReactFlowProvider, Background, BackgroundVariant, MiniMap, useReactFlow, applyNodeChanges, ConnectionMode, MarkerType, type Connection, type Edge, type OnNodesChange, type OnEdgesChange, type Viewport } from '@xyflow/react';
 import { Plus, Search, ZoomIn, ZoomOut, Maximize, Undo2, Redo2, Map, Network, X, ArrowRight, Eye, Trash2, Sparkles, LoaderCircle } from 'lucide-react';
 import '@xyflow/react/dist/style.css';
-import { useApp, createNote, deleteNotes, nextPosition, toast } from '../store';
+import { useApp, createNote, deleteNotes, nextPosition, toast, saveEntityDraft, preserveEntityDraft, getWorkspaceEpoch } from '../store';
 import { uid, now, colors, relations, type Relation } from '../types';
 import { NoteNode, type ResearchNode } from './NoteNode';
 import { Modal } from './Modal';
@@ -12,13 +12,18 @@ import { connectedGroup } from '../lib/groupSummary';
 
 const nodeTypes = { researchNote: NoteNode };
 function EdgeEditor({ edge, close }: { edge: Relation; close: () => void }) {
+  const [base] = useState(edge);
+  const [epoch] = useState(getWorkspaceEpoch);
   const [draft, setDraft] = useState(edge);
-  function save() { useApp.getState().edit(w => { const e = w.edges.find(e => e.id === edge.id); if (e) Object.assign(e, draft, { updatedAt: now() }); }); close(); }
-  return <Modal title="編輯便條關係" description="這是你建立的研究連結，可隨時調整。" onClose={close}>
+  const latest = useRef(draft); latest.current = draft; const dismissed = useRef(false);
+  function finish() { dismissed.current = true; close(); }
+  useEffect(() => () => { if (!dismissed.current && !useApp.getState().workspace.edges.some(e => e.id === base.id)) void preserveEntityDraft('edges', base, latest.current, epoch); }, [base, epoch]);
+  function save() { saveEntityDraft('edges', base, draft, epoch); finish(); }
+  return <Modal title="編輯便條關係" description="這是你建立的研究連結，可隨時調整。" onClose={finish}>
     <div className="editor-form"><label>關係類型<select value={draft.relationType} onChange={e => setDraft({ ...draft, relationType: e.target.value as Relation['relationType'] })}>{relations.map(r => <option key={r}>{r}</option>)}</select></label>
       <label>說明（選填）<input autoFocus value={draft.label} placeholder="例如：不同資料集得到相同結論" maxLength={200} onChange={e => setDraft({ ...draft, label: e.target.value })} /></label>
       <label className="checkbox-label"><input type="checkbox" checked={draft.directed} onChange={e => setDraft({ ...draft, directed: e.target.checked })} />顯示方向箭頭</label>
-      <footer className="modal-actions"><button className="danger-button" onClick={() => { useApp.getState().edit(w => { w.edges = w.edges.filter(e => e.id !== edge.id); }); close(); }}><Trash2 size={14} />刪除連線</button><button className="primary-button" onClick={save}>儲存關係</button></footer></div>
+      <footer className="modal-actions"><button className="danger-button" onClick={() => { dismissed.current = true; useApp.getState().edit(w => { w.edges = w.edges.filter(e => e.id !== edge.id); }); close(); }}><Trash2 size={14} />刪除連線</button><button className="primary-button" onClick={save}>儲存關係</button></footer></div>
   </Modal>;
 }
 function CanvasInner() {

@@ -2,7 +2,7 @@ import JSZip from 'jszip';
 import { z } from 'zod';
 import { db } from './db';
 import { sha256, resetPdfCache } from './pdf';
-import { flushSave, useApp, toast } from '../store';
+import { flushSave, useApp, toast, replaceWorkspace } from '../store';
 import { now, reasoningEfforts, relations, type Workspace, type ImageAsset, type Screenshot } from '../types';
 import { maxImageBytes, validateImageHeader } from './screenshots';
 
@@ -153,12 +153,7 @@ export async function restoreImport(pack: ImportedPack) {
   useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
   await flushSave();
   const w = { ...pack.workspace, id: 'default', jobs: pack.workspace.jobs.map(j => ({ ...j, status: j.status === 'running' ? 'paused' as const : j.status })), updatedAt: now() };
-  await db.transaction('rw', db.documents, db.workspaces, db.assets, async () => {
-    if (pack.documents.length) await db.documents.bulkPut(pack.documents);
-    if (pack.assets.length) await db.assets.bulkPut(pack.assets);
-    await db.workspaces.put(w);
-  });
+  await replaceWorkspace(w, pack.documents, pack.assets);
   resetPdfCache();
-  useApp.setState(s => ({ workspace: w, documentEpoch: s.documentEpoch + 1, history: [], future: [], selectedNoteId: undefined, focusNoteId: undefined, focusHighlightId: undefined, focusScreenshotNoteId: undefined, saveStatus: 'saved' }));
   toast(pack.documents.length ? '研究空間已完整還原' : '筆記已匯入。JSON 不含 PDF 與截圖圖片，完整圖片請還原研究封裝。');
 }

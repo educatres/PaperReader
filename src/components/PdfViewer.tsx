@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type SetStateAction, type PointerEvent as ReactPointerEvent } from 'react';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
-import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan, ExternalLink, PanelLeftClose } from 'lucide-react';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { useApp, addHighlight, toast } from '../store';
 import { openPaper, sha256 } from '../lib/pdf';
@@ -8,6 +8,18 @@ import { rangeQuads, resolveAnchor, selectionOffsets, normalizeText } from '../l
 import { colors, uid, now, type Color, type Highlight, type Screenshot } from '../types';
 import { ScreenshotSelection } from './ScreenshotSelection';
 import { rotateRegion } from '../lib/screenshots';
+import { focusSharedNote, readerWindow } from '../lib/windows';
+
+function useDocumentSetting<T extends string | number>(documentId: string, name: string, fallback: T, valid: (value: unknown) => boolean): [T, (action: SetStateAction<T>) => void] {
+  const [cache, setCache] = useState<Record<string, T>>({});
+  let value = cache[documentId] ?? fallback;
+  if (!(documentId in cache)) { try { const saved = JSON.parse(sessionStorage.getItem(`PaperReader.pdf.${documentId}.${name}`) || 'null'); if (valid(saved)) value = saved as T; } catch { /* Use the default view. */ } }
+  return [value, action => {
+    const next = typeof action === 'function' ? action(value) : action;
+    setCache(current => ({ ...current, [documentId]: next }));
+    try { sessionStorage.setItem(`PaperReader.pdf.${documentId}.${name}`, JSON.stringify(next)); } catch { /* The view still works in memory. */ }
+  }];
+}
 
 function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights, focused, focusedScreenshot, focusSerial, scrollRoot, onActivate, onFocusNote, onUnresolved }: {
   pdf: PDFDocumentProxy; pageIndex: number; width: number; rotation: number; mode: string;
@@ -88,13 +100,14 @@ function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights
   </div>;
 }
 
-export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: string }) {
+export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: () => void; busy?: string; onCollapse?: () => void; onPopout?: () => void }) {
   const { workspace, preferences, focusHighlightId, focusScreenshotNoteId, sourceFocusSerial, documentEpoch } = useApp();
   const paper = workspace.documents.find(d => d.id === workspace.activeDocumentId);
   const [pdf, setPdf] = useState<PDFDocumentProxy>(); const [error, setError] = useState('');
-  const [mode, setMode] = useState<'highlight' | 'select' | 'pan' | 'screenshot'>('highlight'); const [color, setColor] = useState<Color>('yellow');
-  const [zoom, setZoom] = useState(1); const [rotation, setRotation] = useState(0);
-  const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(1); const [pageInput, setPageInput] = useState('1');
+  const [mode, setMode] = useDocumentSetting<'highlight' | 'select' | 'pan' | 'screenshot'>(paper?.id || '', 'mode', 'highlight', value => ['highlight', 'select', 'pan', 'screenshot'].includes(String(value))); const [color, setColor] = useState<Color>('yellow');
+  const [zoom, setZoom] = useDocumentSetting<number>(paper?.id || '', 'zoom', 1, value => typeof value === 'number' && value >= .5 && value <= 2.5);
+  const [rotation, setRotation] = useDocumentSetting<number>(paper?.id || '', 'rotation', 0, value => typeof value === 'number' && [0, 90, 180, 270].includes(value));
+  const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(preferences.lastPage[paper?.id || ''] || 1); const [pageInput, setPageInput] = useState(String(page));
   const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(''); const [hit, setHit] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null); const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const attachRoot = useCallback((element: HTMLDivElement | null) => { scrollRef.current = element; setRoot(element); }, []);
@@ -107,7 +120,7 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
     const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') setMode('select'); };
     window.addEventListener('keydown', cancel); return () => window.removeEventListener('keydown', cancel);
   }, [mode]);
-  useEffect(() => { setPdf(undefined); setError(''); setZoom(1); setRotation(0); setQuery(''); let cancelled = false;
+  useEffect(() => { setPdf(undefined); setError(''); setQuery(''); const saved = useApp.getState().preferences.lastPage[paper?.id || ''] || 1; setPage(saved); setPageInput(String(saved)); let cancelled = false;
     if (paper) openPaper(paper.id).then(doc => { if (!cancelled) setPdf(doc); }).catch(e => { if (!cancelled) setError(e.message); });
     return () => { cancelled = true; };
   }, [paper?.id, paper?.sha256, documentEpoch]);
@@ -116,18 +129,18 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
     const resize = new ResizeObserver(e => setPaneWidth(e[0].contentRect.width)); resize.observe(root); return () => resize.disconnect();
   }, [root]);
   const goToPage = useCallback((n: number) => {
-    if (!paper) return;
+    if (!paper || !pdf) return;
     const target = Math.max(1, Math.min(paper.pageCount, n));
     scrollRef.current?.querySelector(`[data-page-index="${target - 1}"]`)?.scrollIntoView({ behavior: 'instant', block: 'start' });
     setPage(target); setPageInput(String(target));
-  }, [paper]);
+  }, [paper, pdf]);
   useEffect(() => { if (pdf && paper) { const h = useApp.getState().workspace.highlights.find(h => h.id === useApp.getState().focusHighlightId && h.documentId === paper.id); const timer = setTimeout(() => goToPage(screenshotSource ? screenshotSource.pageIndex + 1 : h?.displayPage || preferences.lastPage[paper.id] || 1), 100); return () => clearTimeout(timer); } }, [pdf]); // saved reading position
   const activate = useCallback((n: number) => { setPage(n); setPageInput(String(n)); }, []);
   useEffect(() => {
-    if (!paper) return;
+    if (!paper || !pdf) return;
     const timer = setTimeout(() => { const p = useApp.getState().preferences; useApp.getState().pref({ lastPage: { ...p.lastPage, [paper.id]: page } }); }, 350);
     return () => clearTimeout(timer);
-  }, [page, paper?.id]);
+  }, [page, paper?.id, pdf]);
   useEffect(() => {
     const h = workspace.highlights.find(h => h.id === focusHighlightId);
     if (h && h.documentId === paper?.id && pdf) goToPage(h.displayPage);
@@ -138,6 +151,7 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
     const note = useApp.getState().workspace.notes.find(n => n.id === id);
     if (note?.hidden) useApp.getState().edit(w => { const n = w.notes.find(n => n.id === id); if (n) n.hidden = false; });
     useApp.setState({ selectedNoteId: id, focusNoteId: id });
+    if (readerWindow) focusSharedNote(id);
   }, []);
   const unresolved = useCallback((id: string) => {
     const h = useApp.getState().workspace.highlights.find(h => h.id === id);
@@ -159,12 +173,14 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
     const quads = rangeQuads(range, start); if (!quads.length) return;
     lastSelection.current = key; setTimeout(() => { lastSelection.current = ''; }, 500);
     const content = layer.textContent || ''; const timestamp = now();
+    const epoch = useApp.getState().documentEpoch;
     const highlight: Highlight = { id: uid(), documentId: paper.id, noteId: uid(), pageIndex, displayPage: pageIndex + 1,
       selectedText: raw, rawText: selection.toString() || raw, normalizedText: normalizeText(selection.toString() || raw), textRange: offsets, prefix: content.slice(Math.max(0, offsets.start - 48), offsets.start),
       suffix: content.slice(offsets.end, offsets.end + 48), textQuoteHash: '', quads, coordinateSystem: 'normalized',
       rotation: Number(start.dataset.rotation || 0), color, status: 'resolved', schemaVersion: 1, createdAt: timestamp, updatedAt: timestamp };
     selection.removeAllRanges();
     highlight.textQuoteHash = await sha256(new TextEncoder().encode(raw).buffer);
+    if (epoch !== useApp.getState().documentEpoch || !useApp.getState().workspace.documents.some(d => d.id === highlight.documentId)) return;
     addHighlight(highlight);
   }
   function startPan(e: ReactPointerEvent<HTMLDivElement>) {
@@ -193,9 +209,9 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
         <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁" title="上一頁"><ChevronLeft size={15} /></button>
         <input value={pageInput} aria-label="頁碼" inputMode="numeric" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
         <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁" title="下一頁"><ChevronRight size={15} /></button></div>}
-        <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button></div></div>
+        <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button>{!paper && onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
     {paper ? <>
-      <div className="pdf-toolbar">
+      <div className="pdf-toolbar"><div className="pdf-tools">
         <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" aria-pressed={mode === 'highlight'} className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
           <button title="選取與複製文字" aria-label="選字模式" aria-pressed={mode === 'select'} className={mode === 'select' ? 'active' : ''} onClick={() => setMode('select')}><MousePointer2 size={16} /></button>
           <button title="手掌：拖曳移動 PDF" aria-label="手掌模式" aria-pressed={mode === 'pan'} className={mode === 'pan' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode('pan'); }}><Hand size={16} /></button>
@@ -207,7 +223,7 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
         <button className="icon-button" onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} aria-label="放大 PDF"><ZoomIn size={16} /></button>
         <button className="icon-button optional-tool" onClick={() => setZoom(1)} aria-label="適合寬度" title="適合寬度"><Maximize size={15} /></button>
         <button className="icon-button optional-tool" onClick={() => setRotation(r => (r + 90) % 360)} aria-label="旋轉 PDF" title="旋轉頁面"><RotateCw size={15} /></button>
-      </div>
+      </div><div className="pdf-pane-tools">{onPopout && <button className="icon-button" title="在新視窗閱讀" aria-label="在新視窗閱讀" onClick={onPopout}><ExternalLink size={16} /></button>}{onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
       {searchOpen && <div className="pdf-search"><Search size={15} /><input autoFocus placeholder="搜尋文獻中的文字…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') jumpSearch(e.shiftKey ? -1 : 1); }} aria-label="PDF 搜尋文字" />
         <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
       {noText && <div className="ocr-notice"><ScanText size={15} />這一頁需要 OCR 才能文字標註；可使用截圖模式留存。</div>}
