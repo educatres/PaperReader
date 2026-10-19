@@ -55,7 +55,7 @@ test('offline reload retains local papers and notes with the installed service w
   await context.setOffline(true); await page.reload();
   await expect(page.locator('.note-card')).toHaveCount(1);
   await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();
-  await expect(page.locator('.offline-label')).toContainText('離線閱讀中');
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
   await context.setOffline(false);
 });
 test('20-page double-column PDF renders lazily, supports page navigation, and scanned pages stay readable', async ({ page }) => {

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
-import { ChevronLeft, ChevronRight, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan } from 'lucide-react';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import { useApp, addHighlight, toast } from '../store';
 import { openPaper, sha256 } from '../lib/pdf';
@@ -92,12 +92,14 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
   const { workspace, preferences, focusHighlightId, focusScreenshotNoteId, sourceFocusSerial, documentEpoch } = useApp();
   const paper = workspace.documents.find(d => d.id === workspace.activeDocumentId);
   const [pdf, setPdf] = useState<PDFDocumentProxy>(); const [error, setError] = useState('');
-  const [mode, setMode] = useState<'highlight' | 'select' | 'screenshot'>('highlight'); const [color, setColor] = useState<Color>('yellow');
+  const [mode, setMode] = useState<'highlight' | 'select' | 'pan' | 'screenshot'>('highlight'); const [color, setColor] = useState<Color>('yellow');
   const [zoom, setZoom] = useState(1); const [rotation, setRotation] = useState(0);
   const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(1); const [pageInput, setPageInput] = useState('1');
   const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(''); const [hit, setHit] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null); const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const attachRoot = useCallback((element: HTMLDivElement | null) => { scrollRef.current = element; setRoot(element); }, []);
+  const pan = useRef<{ pointerId: number; x: number; y: number; left: number; top: number } | null>(null);
+  const [panning, setPanning] = useState(false);
   const lastSelection = useRef('');
   const screenshotSource = workspace.notes.find(n => n.id === focusScreenshotNoteId && n.documentId === paper?.id)?.screenshot;
   useEffect(() => {
@@ -165,17 +167,38 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
     highlight.textQuoteHash = await sha256(new TextEncoder().encode(raw).buffer);
     addHighlight(highlight);
   }
+  function startPan(e: ReactPointerEvent<HTMLDivElement>) {
+    if (mode !== 'pan' || e.button !== 0 || !e.isPrimary) return;
+    e.preventDefault(); window.getSelection()?.removeAllRanges();
+    pan.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, left: e.currentTarget.scrollLeft, top: e.currentTarget.scrollTop };
+    e.currentTarget.setPointerCapture(e.pointerId); setPanning(true);
+  }
+  function movePan(e: ReactPointerEvent<HTMLDivElement>) {
+    const drag = pan.current; if (!drag || drag.pointerId !== e.pointerId) return;
+    e.currentTarget.scrollLeft = drag.left + drag.x - e.clientX;
+    e.currentTarget.scrollTop = drag.top + drag.y - e.clientY;
+  }
+  function stopPan(e: ReactPointerEvent<HTMLDivElement>) {
+    if (pan.current?.pointerId !== e.pointerId) return;
+    pan.current = null; setPanning(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  }
   const hits = query.trim() && paper ? paper.pages.flatMap((text, i) => text.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()) ? [i + 1] : []) : [];
   function jumpSearch(direction: number) { if (!hits.length) return; const next = (hit + direction + hits.length) % hits.length; setHit(next); goToPage(hits[next]); }
   useEffect(() => { setHit(0); if (hits.length) goToPage(hits[0]); }, [query]);
   const noText = paper && !paper.pages[page - 1]?.trim();
   return <section className="pdf-pane" aria-label="PDF 閱讀器">
     <div className="pane-heading"><div className="eyebrow"><span className="section-dot" />文獻閱讀 <span className="small-label">READ</span></div>
-      <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button></div>
+      <div className="pdf-heading-actions">{paper && <div className="page-controls" role="group" aria-label="PDF 翻頁">
+        <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁" title="上一頁"><ChevronLeft size={15} /></button>
+        <input value={pageInput} aria-label="頁碼" inputMode="numeric" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
+        <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁" title="下一頁"><ChevronRight size={15} /></button></div>}
+        <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button></div></div>
     {paper ? <>
       <div className="pdf-toolbar">
-        <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
-          <button title="選取與複製文字" aria-label="選字模式" className={mode === 'select' ? 'active' : ''} onClick={() => setMode('select')}><MousePointer2 size={16} /></button>
+        <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" aria-pressed={mode === 'highlight'} className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
+          <button title="選取與複製文字" aria-label="選字模式" aria-pressed={mode === 'select'} className={mode === 'select' ? 'active' : ''} onClick={() => setMode('select')}><MousePointer2 size={16} /></button>
+          <button title="手掌：拖曳移動 PDF" aria-label="手掌模式" aria-pressed={mode === 'pan'} className={mode === 'pan' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode('pan'); }}><Hand size={16} /></button>
           <button title="拖曳框選 PDF 截圖，Esc 取消" aria-label="截圖模式" aria-pressed={mode === 'screenshot'} className={mode === 'screenshot' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode(mode === 'screenshot' ? 'select' : 'screenshot'); }}><Scan size={16} /></button></div>
         <div className="color-palette">{(Object.keys(colors) as Color[]).map(c => <button key={c} className={`color-dot ${color === c ? 'active' : ''}`} style={{ background: colors[c] }} title={`${({ yellow: '黃色', green: '綠色', pink: '粉色', blue: '藍色' })[c]}標記`} aria-label={`${c} highlight`} onClick={() => { setColor(c); setMode('highlight'); }} />)}</div>
         <div className="toolbar-divider" />
@@ -189,17 +212,15 @@ export function PdfViewer({ onImport, busy }: { onImport: () => void; busy?: str
         <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
       {noText && <div className="ocr-notice"><ScanText size={15} />這一頁需要 OCR 才能文字標註；可使用截圖模式留存。</div>}
       {mode === 'screenshot' && <div className="screenshot-notice"><Scan size={15} /><span>在單頁內拖曳框選，放開即新增截圖便條。文字留白，AI 只讀取自行輸入的文字。</span><button onClick={() => setMode('select')}>結束截圖 · Esc</button></div>}
-      <div className={`pdf-scroll mode-${mode}`} ref={attachRoot} onPointerUp={() => { setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
+      <div className={`pdf-scroll mode-${mode}${panning ? ' is-panning' : ''}`} ref={attachRoot}
+        onPointerDown={startPan} onPointerMove={movePan} onPointerCancel={stopPan} onLostPointerCapture={stopPan}
+        onPointerUp={e => { if (pan.current) stopPan(e); else setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
         {error ? <div className="empty-panel"><ScanText size={35} /><h3>無法開啟 PDF</h3><p>{error}</p><button className="primary-button" onClick={onImport}>重新匯入 PDF</button></div> : pdf ?
           Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${documentEpoch}-${i}`} pdf={pdf} documentId={paper.id} pageIndex={i} width={Math.max(220, paneWidth - 64) * zoom} rotation={rotation} mode={mode}
             focusedScreenshot={screenshotSource?.pageIndex === i ? screenshotSource : undefined}
             highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
           : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
       </div>
-      <div className="pdf-bottom"><span className="muted"><Highlighter size={13} /> {mode === 'highlight' ? '選取文字，自動留下重點' : mode === 'screenshot' ? '拖曳框選截圖 · Esc 取消' : '選取文字以複製'}</span><div className="page-controls">
-        <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁"><ChevronLeft size={15} /></button>
-        <input value={pageInput} aria-label="頁碼" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
-        <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁"><ChevronRight size={15} /></button></div></div>
     </> : <div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div>}
     {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={25} /><p>{busy}</p></div>}
   </section>;

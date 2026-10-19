@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
-import { BookOpen, ChevronDown, ChevronUp, CircleHelp, FilePlus2, FolderOpen, Download, KeyRound, ShieldCheck, Sparkles, Check, LoaderCircle, PanelLeft, X, FileText, ArrowUpRight, LockKeyhole, Trash2, HardDrive, Plus, Upload, CheckCircle2, AlertCircle, WifiOff, FileArchive, Braces, NotebookPen } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronUp, CircleHelp, FilePlus2, FolderOpen, Download, KeyRound, ShieldCheck, Sparkles, Check, LoaderCircle, PanelLeft, X, FileText, ArrowUpRight, LockKeyhole, Trash2, HardDrive, Plus, Upload, CheckCircle2, AlertCircle, FileArchive, Braces, NotebookPen } from 'lucide-react';
 import { PdfViewer } from './components/PdfViewer';
 import { ResearchCanvas } from './components/ResearchCanvas';
 import { Settings } from './components/Settings';
@@ -32,7 +32,7 @@ function HelpDialog({ close }: { close: () => void }) {
   return <Modal title="把閱讀變成自己的知識" description="PaperReader 使用指南" onClose={close} wide>
     <div className="help-content">{[
       ['01', '帶入你的文獻', '匯入或拖放 PDF。所有原檔、文字索引與研究筆記只保存在此瀏覽器的 IndexedDB。可在文件列切換多篇論文。'],
-      ['02', '標記值得留下的話', '螢光筆模式下直接選字，鬆開滑鼠就會產生一張來源便條。跨行屬於同一張；跨頁請分開標記。選字模式可複製文字。'],
+      ['02', '標記值得留下的話', '螢光筆模式下直接選字，鬆開滑鼠就會產生一張來源便條。跨行屬於同一張；跨頁請分開標記。選字模式可複製文字，選取範圍以灰色顯示。手掌模式可拖曳移動 PDF，翻頁按鈕與頁碼位於閱讀面板上方。'],
       ['03', '在白板上連結想法', '拖曳便條標題整理位置，從四周的連接點拖曳至另一張便條。雙擊關係線可設定支持、對比或延伸等關係。Shift 可多選。'],
       ['04', '需要時，邀請 AI 協助', '貼上你自己的 OpenAI、CGU 或 Gemini key，選擇模型並測試。OpenAI／CGU 提供 gpt-6-luna、gpt-5.6-luna、自訂模型與低／中／高推理（預設中）。點翻譯／摘要才會傳送該便條原文；全文摘要需再次確認。'],
       ['05', '回查原文，定期備份', '便條右下箭頭可回到 PDF；點 PDF 標記可聚焦便條。JSON 不含 PDF，完整備份請使用研究封裝。AI 的來源範圍需人工核對。'],
@@ -50,12 +50,12 @@ function AppContent() {
   useCredentials(); const { full } = useAI();
   const currentToast = useApp(s => s.toast);
   const [libraryOpen, setLibraryOpen] = useState(false); const [summaryOpen, setSummaryOpen] = useState(false);
-  const [busy, setBusy] = useState(''); const [dragging, setDragging] = useState(false); const [offline, setOffline] = useState(!navigator.onLine);
+  const [busy, setBusy] = useState(''); const [dragging, setDragging] = useState(false);
   const [split, setSplit] = useState(preferences.split); const [mobileView, setMobileView] = useState('read');
   const [storage, setStorage] = useState('');
   const fileRef = useRef<HTMLInputElement>(null); const restoreRef = useRef<HTMLInputElement>(null); const splitRef = useRef<HTMLDivElement>(null);
   const fileBusy = useRef(false); const dragDepth = useRef(0);
-  useEffect(() => { void initialize(); const listener = () => setOffline(!navigator.onLine); window.addEventListener('online', listener); window.addEventListener('offline', listener); return () => { window.removeEventListener('online', listener); window.removeEventListener('offline', listener); }; }, []);
+  useEffect(() => { void initialize(); }, []);
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -137,7 +137,6 @@ function AppContent() {
       </div>
     </main>
     {full && <div className="global-ai-progress"><LoaderCircle className="spin" size={17} /><div><strong>{full.phase}</strong><span>分塊 {full.completed} / {full.total} · 已完成結果即時保存在本機</span></div><progress value={full.completed} max={full.total} /><button onClick={() => cancelTask(full.jobId)}>取消</button></div>}
-    <footer className="app-footer"><div><LockKeyhole size={12} /><span>Local first. Always yours.</span><i />{offline ? <span className="offline-label"><WifiOff size={12} />離線閱讀中</span> : <span>PDF 與筆記保存在這台裝置</span>}</div><button onClick={() => useApp.setState({ helpOpen: true })}>一點閱讀，一點發現 <ArrowUpRight size={12} /></button></footer>
     <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple hidden data-testid="pdf-input" onChange={e => { if (e.target.files) void handleFiles([...e.target.files]); }} />
     <input ref={restoreRef} type="file" accept=".researchpack,.zip,.json" hidden data-testid="restore-input" onChange={e => { if (e.target.files?.[0]) void restore(e.target.files[0]); }} />
     {settingsOpen && <Settings close={() => useApp.setState({ settingsOpen: false })} />}
