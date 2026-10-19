@@ -1,22 +1,25 @@
 import { create } from 'zustand';
 import { db, loadSharedState, commitChange, holdWindowStorage } from './lib/db';
 import { applyPatches, changesBetween, equal, invertPatches, rebasePatches, type Change, type ConflictDraft, type SyncVersion } from './lib/workspaceChanges';
-import { acknowledge, announceDocument, listenWindows, readerWindow, requestedDocument, routeSource, send, startWindows, windowId } from './lib/windows';
+import { acknowledge, announceDocument, listenWindows, readerWindow, boardWindow, requestedDocument, requestedViewport, routeSource, send, startWindows, windowId } from './lib/windows';
 import { emptyWorkspace, now, uid, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
 
-const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, split: 54, lastPage: {} };
+const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
+function freshBoardWindow() { try { return boardWindow && sessionStorage.getItem('PaperReader.boardInstance') !== windowId; } catch { return boardWindow; } }
 function readView(): Partial<Workspace> { try { return JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}'); } catch { return {}; } }
 function saveView(workspace: Workspace) { try { sessionStorage.setItem('PaperReader.view', JSON.stringify({ activeDocumentId: workspace.activeDocumentId, viewport: workspace.viewport })); } catch { /* The view still works in memory. */ } announceDocument(workspace.activeDocumentId); }
+function saveReadingPreferences(p: Preferences) { try { sessionStorage.setItem('PaperReader.readingPreferences', JSON.stringify({ lastPage: p.lastPage, split: p.split, toolbarCollapsed: p.toolbarCollapsed, pdfCollapsed: p.pdfCollapsed, boardCollapsed: p.boardCollapsed })); } catch { /* The layout still works in memory. */ } }
 function readPreferences(): Preferences {
   try {
     const shared = JSON.parse(localStorage.getItem('PaperReader.preferences') || '{}');
     const p = { ...shared, ...JSON.parse(sessionStorage.getItem('PaperReader.readingPreferences') || '{}') };
+    const pdfCollapsed = freshBoardWindow() || p.pdfCollapsed === true;
     return { ...defaultPreferences, provider: ['openai', 'gemini', 'cgu', 'mercuryapi'].includes(p.provider) ? p.provider : 'openai',
       models: { openai: typeof p.models?.openai === 'string' ? p.models.openai : defaultPreferences.models.openai, gemini: typeof p.models?.gemini === 'string' ? p.models.gemini : '', cgu: typeof p.models?.cgu === 'string' ? p.models.cgu : defaultPreferences.models.cgu, mercuryapi: typeof p.models?.mercuryapi === 'string' ? p.models.mercuryapi : '' },
       reasoningEffort: reasoningEfforts.includes(p.reasoningEffort) ? p.reasoningEffort : 'medium', toolbarCollapsed: p.toolbarCollapsed === true,
-      pdfCollapsed: p.pdfCollapsed === true,
+      pdfCollapsed, boardCollapsed: !pdfCollapsed && p.boardCollapsed === true,
       split: typeof p.split === 'number' ? Math.max(30, Math.min(75, p.split)) : 54, lastPage: p.lastPage || {} };
-  } catch { return defaultPreferences; }
+  } catch { return { ...defaultPreferences, pdfCollapsed: boardWindow }; }
 }
 let version: SyncVersion = { id: 'default', epoch: '', revision: -1 };
 let pending: Change[] = [];
@@ -85,13 +88,16 @@ export const useApp = create<AppState>((set, get) => ({
   },
   pref(change) {
     const preferences = { ...get().preferences, ...change };
+    // Keep one panel visible when the other is hidden or opened separately.
+    if (change.boardCollapsed === true) preferences.pdfCollapsed = false;
+    if (change.pdfCollapsed === true) preferences.boardCollapsed = false;
     set({ preferences });
     try {
       const saved = JSON.parse(localStorage.getItem('PaperReader.preferences') || '{}');
       const supported = Object.fromEntries(Object.keys(defaultPreferences).filter(key => key in saved).map(key => [key, saved[key]]));
-      localStorage.setItem('PaperReader.preferences', JSON.stringify({ ...supported, ...change }));
-      sessionStorage.setItem('PaperReader.readingPreferences', JSON.stringify({ lastPage: preferences.lastPage, split: preferences.split, toolbarCollapsed: preferences.toolbarCollapsed, pdfCollapsed: preferences.pdfCollapsed }));
+      localStorage.setItem('PaperReader.preferences', JSON.stringify({ ...supported, ...change, pdfCollapsed: preferences.pdfCollapsed, boardCollapsed: preferences.boardCollapsed }));
     } catch { /* memory settings still work */ }
+    saveReadingPreferences(preferences);
   },
   undo() {
     const { history, future } = get(); if (!history.length) return;
@@ -138,8 +144,10 @@ async function initializeOnce() {
     await holdWindowStorage();
     const state = await loadSharedState(); version = state.version;
     const view = readView(); const active = requestedDocument || view.activeDocumentId || state.workspace.activeDocumentId || state.workspace.documents[0]?.id;
-    const workspace = { ...state.workspace, activeDocumentId: state.workspace.documents.some(d => d.id === active) ? active : undefined, viewport: view.viewport || state.workspace.viewport };
+    const workspace = { ...state.workspace, activeDocumentId: state.workspace.documents.some(d => d.id === active) ? active : undefined, viewport: freshBoardWindow() && requestedViewport || view.viewport || state.workspace.viewport };
+    try { if (boardWindow) sessionStorage.setItem('PaperReader.boardInstance', windowId); } catch { /* Reading still works without saved views. */ }
     useApp.setState({ workspace, conflicts: await db.drafts.toArray() }); saveView(workspace);
+    saveReadingPreferences(useApp.getState().preferences);
     listenWindows(message => {
       if (message.type === 'changed') refreshInBackground();
       if (message.type === 'files') refreshInBackground(() => { useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 })); window.dispatchEvent(new Event('paperreader-files')); });
@@ -147,7 +155,7 @@ async function initializeOnce() {
         const note = useApp.getState().workspace.notes.find(n => n.id === message.note.id);
         if (note) { focusLocalSource(note); window.focus(); acknowledge(message.from, message.request); }
       });
-      if (message.type === 'note' && !readerWindow) useApp.setState({ selectedNoteId: message.noteId, focusNoteId: message.noteId });
+      if (message.type === 'note' && message.to === windowId && !readerWindow && !useApp.getState().preferences.boardCollapsed) useApp.setState({ selectedNoteId: message.noteId, focusNoteId: message.noteId });
     });
     startWindows();
     window.addEventListener('focus', () => refreshInBackground());

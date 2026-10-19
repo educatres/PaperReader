@@ -150,8 +150,9 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   const focusNote = useCallback((id: string) => {
     const note = useApp.getState().workspace.notes.find(n => n.id === id);
     if (note?.hidden) useApp.getState().edit(w => { const n = w.notes.find(n => n.id === id); if (n) n.hidden = false; });
-    useApp.setState({ selectedNoteId: id, focusNoteId: id });
-    if (readerWindow) focusSharedNote(id);
+    const externalBoard = readerWindow || useApp.getState().preferences.boardCollapsed;
+    useApp.setState({ selectedNoteId: id, focusNoteId: externalBoard ? undefined : id });
+    if (externalBoard) focusSharedNote(id);
   }, []);
   const unresolved = useCallback((id: string) => {
     const h = useApp.getState().workspace.highlights.find(h => h.id === id);

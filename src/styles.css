@@ -103,6 +103,9 @@
 .pdf-toolbar > .pdf-tools { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; height: 100%; }
 .pdf-tools > * { flex-shrink: 0; }
 .pdf-pane-tools { display: flex; gap: 2px; border-left: 1px solid var(--line); padding-left: 5px; }
+.board-pane-tools { display: flex; flex-shrink: 0; gap: 2px; border-left: 1px solid var(--line); padding-left: 5px; margin-left: 3px; }
+.board-pane > .pane-heading { height: auto; min-height: 49px; flex-wrap: wrap; gap: 6px 10px; padding-block: 8px; }
+.board-heading-actions { flex-wrap: wrap; }
 .show-pdf-button { display: flex; align-items: center; gap: 5px; color: var(--green); white-space: nowrap; font-size: 11px; }
 .library-paper > button:first-child { padding-right: 40px; }
 .open-paper-window { position: absolute; right: 19px; top: 8px; width: 23px; opacity: 0; }

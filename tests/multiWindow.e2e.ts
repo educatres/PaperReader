@@ -37,6 +37,21 @@ async function snapshot(page: Page): Promise<any> {
     opening.onsuccess = () => { const database = opening.result; const request = database.transaction('workspaces').objectStore('workspaces').get('default'); request.onsuccess = () => { database.close(); resolve(request.result); }; request.onerror = () => reject(request.error); };
   }));
 }
+async function boardView(page: Page) {
+  return page.evaluate(() => JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}').viewport as { x: number; y: number; zoom: number });
+}
+async function panBoard(page: Page, dx = -180, dy = -100) {
+  const previous = await boardView(page); const bounds = (await page.locator('.react-flow__pane').boundingBox())!;
+  const x = bounds.x + bounds.width - 65; const y = bounds.y + bounds.height - 85;
+  await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y + dy, { steps: 10 }); await page.mouse.up();
+  await expect.poll(async () => Math.abs((await boardView(page)).x - previous.x)).toBeGreaterThan(20);
+  await page.waitForTimeout(400); // Allow the canvas pan animation to finish before capturing a new window's view.
+  return boardView(page);
+}
+async function openBoard(page: Page, context: BrowserContext) {
+  const next = context.waitForEvent('page'); await page.getByRole('button', { name: '在新視窗開啟白板', exact: true }).click();
+  const board = await next; await expect(board.locator('.research-canvas')).toBeVisible(); return board;
+}
 
 test('PDF collapse restores this window’s page, zoom and hand mode across reload; popup blocking has a tab fallback', async ({ page }) => {
   await page.goto('./'); await loadPaper(page); await ready(page);
@@ -85,6 +100,7 @@ test('multiple independent PDF windows share simultaneous marks, local undo, sou
   await one.getByRole('button', { name: '重做', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(2);
   await go(one, 1); await two.bringToFront();
+  await two.getByLabel('頁碼', { exact: true }).click(); // Use the target reader: headless bringToFront alone does not always emit a window focus event.
   await page.locator('.note-card').filter({ hasText: 'Window A page 2' }).getByRole('button', { name: '定位原文', exact: true }).click();
   await expect(two.getByLabel('頁碼', { exact: true })).toHaveValue('2');
   await expect(one.getByLabel('頁碼', { exact: true })).toHaveValue('1');
@@ -239,4 +255,95 @@ test('an editor opened before restore cannot overwrite the restored note even wh
   await other.getByRole('button', { name: '套用草稿版本', exact: true }).click();
   await expect(other.locator('.toast')).toContainText('研究空間已更換');
   expect((await snapshot(page)).notes[0].userNotes).toBe('Restored workspace');
+});
+
+test('either panel can fill the window, hidden whiteboard views survive reload, and mobile actions remain reachable', async ({ page, context }) => {
+  await page.goto('./'); await loadPaper(page); await ready(page);
+  const divider = page.getByRole('separator', { name: '調整閱讀器與白板寬度' });
+  for (let i = 0; i < 11; i++) await divider.press('ArrowRight');
+  const narrowBoard = (await page.locator('.board-pane').boundingBox())!;
+  const hideBoard = (await page.getByRole('button', { name: '隱藏知識白板', exact: true }).boundingBox())!;
+  expect(hideBoard.x + hideBoard.width).toBeLessThanOrEqual(narrowBoard.x + narrowBoard.width);
+  for (let i = 0; i < 11; i++) await divider.press('ArrowLeft');
+  const view = await panBoard(page);
+  await page.getByRole('button', { name: '隱藏知識白板', exact: true }).click();
+  await expect(page.locator('.board-pane, .split-handle')).toHaveCount(0);
+  expect((await page.locator('.pdf-pane').boundingBox())!.width).toBe(1440);
+  await page.reload(); await ready(page); await expect(page.locator('.board-pane')).toHaveCount(0);
+  await page.getByRole('button', { name: '顯示知識白板', exact: true }).click();
+  await expect(page.locator('.board-pane')).toBeVisible(); expect(await boardView(page)).toEqual(view);
+  await page.getByRole('button', { name: '隱藏 PDF 面板', exact: true }).click();
+  await expect(page.locator('.pdf-pane')).toHaveCount(0);
+  await page.getByRole('button', { name: '隱藏知識白板', exact: true }).click();
+  await ready(page); await expect(page.locator('.board-pane')).toHaveCount(0);
+  const reader = await openReader(page, context); // A board must open even when inherited preferences hide it.
+  const next = context.waitForEvent('page'); await reader.getByRole('link', { name: '研究白板', exact: true }).click();
+  const board = await next; await expect(board.locator('.board-pane')).toBeVisible();
+  await expect(board.locator('.pdf-pane')).toHaveCount(0);
+  await board.reload(); await expect(board.locator('.board-pane')).toBeVisible(); await expect(board.locator('.pdf-pane')).toHaveCount(0);
+  await board.evaluate(() => { window.open = () => null; });
+  await board.getByRole('button', { name: '在新視窗開啟白板', exact: true }).click();
+  await expect(board.getByRole('link', { name: '改用新分頁開啟', exact: true })).toHaveAttribute('href', /view=board/);
+  await expect(board.locator('.board-pane')).toBeVisible();
+  await board.setViewportSize({ width: 390, height: 844 });
+  await expect(board.getByRole('button', { name: '在新視窗開啟白板', exact: true })).toBeInViewport();
+  await expect(board.getByRole('button', { name: '隱藏知識白板', exact: true })).toBeInViewport();
+  await board.screenshot({ path: 'test-results/whiteboard-window-mobile.png' });
+  await board.getByRole('button', { name: '隱藏知識白板', exact: true }).click(); await ready(board);
+  await board.getByRole('button', { name: '顯示知識白板', exact: true }).click();
+  await expect(board.locator('.board-pane')).toBeVisible();
+});
+
+test('multiple board windows inherit the current view then retain independent positions through edits, hiding and reload', async ({ page, context }) => {
+  await page.goto('./'); await loadPaper(page); await ready(page);
+  await page.getByRole('button', { name: '隱藏 PDF 面板', exact: true }).click();
+  await page.getByRole('button', { name: '新增便條', exact: true }).click();
+  await expect(page.locator('.note-card')).toHaveCount(1); await page.waitForTimeout(550);
+  const original = await panBoard(page);
+  const one = await openBoard(page, context); expect(await boardView(one)).toEqual(original);
+  const first = await panBoard(one, -280, -90);
+  const two = await openBoard(one, context); expect(await boardView(two)).toEqual(first);
+  await two.getByRole('button', { name: '縮小白板', exact: true }).click();
+  await expect.poll(async () => (await boardView(two)).zoom).toBeLessThan(first.zoom);
+  const second = await panBoard(two, -140, -80);
+  expect(await boardView(one)).toEqual(first); expect(await boardView(page)).toEqual(original);
+  await page.getByRole('button', { name: '白板全貌', exact: true }).click(); await page.waitForTimeout(450);
+  await page.getByRole('button', { name: '編輯便條', exact: true }).click(); await page.getByLabel('便條標題').fill('Shared board edit');
+  await page.getByRole('button', { name: '儲存便條', exact: true }).click();
+  for (const target of [one, two]) await expect(target.locator('.note-title')).toHaveText('Shared board edit');
+  expect(await boardView(one)).toEqual(first); expect(await boardView(two)).toEqual(second);
+  await one.getByRole('button', { name: '隱藏知識白板', exact: true }).click();
+  await one.getByRole('button', { name: '顯示知識白板', exact: true }).click();
+  expect(await boardView(one)).toEqual(first);
+  await two.reload(); await expect(two.locator('.note-title')).toHaveText('Shared board edit');
+  expect(await boardView(two)).toEqual(second);
+  await page.close(); await one.close();
+  await two.getByRole('button', { name: '新增便條', exact: true }).click(); await expect(two.locator('.note-card')).toHaveCount(2);
+  await expect.poll(async () => (await snapshot(two)).notes.length).toBe(2);
+  await two.screenshot({ path: 'test-results/whiteboard-window-desktop.png' });
+});
+
+test('a PDF highlight focuses only the most recently used visible board and source navigation returns to its reader', async ({ page, context }) => {
+  await page.goto('./'); await loadPaper(page); await ready(page); await mark(page, 1);
+  await expect(page.locator('.note-card')).toHaveCount(1); await page.waitForTimeout(550);
+  const reader = await openReader(page, context);
+  const one = await openBoard(page, context); await panBoard(one, -340, -120);
+  const two = await openBoard(one, context); const otherView = await panBoard(two, -260, -130);
+  const oldMainView = await panBoard(page, -220, -100); const before = await boardView(one);
+  await one.bringToFront(); await one.getByLabel('搜尋便條', { exact: true }).click();
+  await reader.locator('.pdf-highlight').first().click();
+  await expect.poll(async () => (await boardView(one)).x).not.toBe(before.x);
+  expect(await boardView(two)).toEqual(otherView); expect(await boardView(page)).toEqual(oldMainView);
+  await page.getByRole('button', { name: '隱藏知識白板', exact: true }).click(); await ready(page);
+  const beforeHiddenFocus = await panBoard(one, -300, -90);
+  await page.locator('.pdf-highlight').first().click();
+  await expect.poll(async () => (await boardView(one)).x).not.toBe(beforeHiddenFocus.x);
+  expect(await boardView(two)).toEqual(otherView);
+  await page.getByRole('button', { name: '顯示知識白板', exact: true }).click();
+  await page.waitForTimeout(550); // A hidden board must retain its own view after routing a highlight to another board.
+  expect(await boardView(page)).toEqual(oldMainView);
+  await go(reader, 2);
+  await one.getByRole('button', { name: '定位原文', exact: true }).click();
+  await expect(reader.getByLabel('頁碼', { exact: true })).toHaveValue('1');
+  await expect(one.locator('.pdf-pane')).toHaveCount(0);
 });
