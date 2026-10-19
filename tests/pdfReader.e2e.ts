@@ -82,7 +82,8 @@ test('text selection is gray in both text modes and saved highlights remain yell
 test('top page controls stay usable on desktop and mobile with the reading area reaching the bottom', async ({ page }) => {
   await loadPaper(page);
   const controls = page.getByRole('group', { name: 'PDF 翻頁', exact: true });
-  await expect(page.locator('.pane-heading').getByRole('group', { name: 'PDF 翻頁', exact: true })).toBeVisible();
+  await expect(page.locator('.pdf-toolbar').getByRole('group', { name: 'PDF 翻頁', exact: true })).toBeVisible();
+  await expect(page.locator('.pdf-pane > .pane-heading')).toHaveCount(0);
   await expect(page.locator('.pdf-bottom, .app-footer')).toHaveCount(0);
   await expect(controls.getByRole('button', { name: '上一頁', exact: true })).toBeDisabled();
   await controls.getByRole('button', { name: '下一頁', exact: true }).click();
@@ -97,6 +98,8 @@ test('top page controls stay usable on desktop and mobile with the reading area 
     await expect(page.getByRole('button', { name: '使用指南', exact: true })).toBeVisible();
     const area = (await page.locator('.pdf-scroll').boundingBox())!;
     expect(area.y + area.height).toBe(844);
+    const toolbar = (await page.locator('.pdf-toolbar').boundingBox())!;
+    expect(area.y).toBe(toolbar.y + toolbar.height);
     const nav = (await controls.boundingBox())!;
     const pane = (await page.locator('.pdf-pane').boundingBox())!;
     expect(nav.x).toBeGreaterThanOrEqual(pane.x);

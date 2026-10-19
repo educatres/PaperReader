@@ -103,9 +103,35 @@
 .pdf-toolbar > .pdf-tools { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; height: 100%; }
 .pdf-tools > * { flex-shrink: 0; }
 .pdf-pane-tools { display: flex; gap: 2px; border-left: 1px solid var(--line); padding-left: 5px; }
+.pdf-toolbar > .page-controls { margin-left: 3px; padding-left: 5px; border-left: 1px solid var(--line); }
+.pdf-pane .busy-overlay { inset: 0; }
+.empty-pdf-collapse { position: absolute; top: 8px; right: 12px; z-index: 1; }
 .board-pane-tools { display: flex; flex-shrink: 0; gap: 2px; border-left: 1px solid var(--line); padding-left: 5px; margin-left: 3px; }
-.board-pane > .pane-heading { height: auto; min-height: 49px; flex-wrap: wrap; gap: 6px 10px; padding-block: 8px; }
-.board-heading-actions { flex-wrap: wrap; }
+.board-pane { container-type: inline-size; }
+.board-pane > .pane-heading { height: auto; min-height: 49px; gap: 10px; padding-block: 8px; }
+.board-pane > .pane-heading > .eyebrow { flex-shrink: 0; }
+.board-heading-actions { flex: 1; min-width: 0; justify-content: flex-end; }
+.board-heading-actions > button { flex-shrink: 0; }
+.board-search { position: relative; flex: 1; min-width: 64px; max-width: 200px; height: 28px; gap: 5px; margin: 0; padding: 0 6px; border: 1px solid #dfe4d6; border-radius: 4px; background: #fffef9; z-index: 25; }
+.board-search > svg { flex-shrink: 0; }
+.board-search input { min-width: 0; }
+.board-search:focus-within { border-color: #8ca697; box-shadow: 0 0 0 2px #8ca69720; }
+.board-search-actions { position: absolute; top: calc(100% + 5px); right: 0; display: flex; align-items: center; gap: 4px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; background: #fffef9; box-shadow: 0 3px 9px #3d492212; white-space: nowrap; }
+.board-search-actions > span { font-size: 10px; }
+.board-search-actions .icon-button { width: 25px; height: 25px; }
+@container (max-width: 760px) {
+  .board-pane .small-label, .board-heading-actions > .icon-button { display: none; }
+}
+@container (max-width: 600px) {
+  .board-heading-actions { gap: 4px; }
+  .board-heading-actions .group-summary-button > span, .board-heading-actions .add-note-button > span { display: none; }
+  .board-heading-actions .group-summary-button, .board-heading-actions .add-note-button { padding: 5px; }
+  .board-heading-actions .icon-button { width: 28px; height: 28px; }
+}
+@container (max-width: 480px) {
+  .board-pane > .pane-heading { padding-inline: 12px; }
+  .board-pane > .pane-heading > .eyebrow { display: none; }
+}
 .show-pdf-button { display: flex; align-items: center; gap: 5px; color: var(--green); white-space: nowrap; font-size: 11px; }
 .library-paper > button:first-child { padding-right: 40px; }
 .open-paper-window { position: absolute; right: 19px; top: 8px; width: 23px; opacity: 0; }

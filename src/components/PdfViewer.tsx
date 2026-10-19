@@ -205,12 +205,6 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   useEffect(() => { setHit(0); if (hits.length) goToPage(hits[0]); }, [query]);
   const noText = paper && !paper.pages[page - 1]?.trim();
   return <section className="pdf-pane" aria-label="PDF 閱讀器">
-    <div className="pane-heading"><div className="eyebrow"><span className="section-dot" />文獻閱讀 <span className="small-label">READ</span></div>
-      <div className="pdf-heading-actions">{paper && <div className="page-controls" role="group" aria-label="PDF 翻頁">
-        <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁" title="上一頁"><ChevronLeft size={15} /></button>
-        <input value={pageInput} aria-label="頁碼" inputMode="numeric" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
-        <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁" title="下一頁"><ChevronRight size={15} /></button></div>}
-        <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button>{!paper && onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
     {paper ? <>
       <div className="pdf-toolbar"><div className="pdf-tools">
         <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" aria-pressed={mode === 'highlight'} className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
@@ -224,6 +218,11 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         <button className="icon-button" onClick={() => setZoom(z => Math.min(2.5, z + 0.25))} aria-label="放大 PDF"><ZoomIn size={16} /></button>
         <button className="icon-button optional-tool" onClick={() => setZoom(1)} aria-label="適合寬度" title="適合寬度"><Maximize size={15} /></button>
         <button className="icon-button optional-tool" onClick={() => setRotation(r => (r + 90) % 360)} aria-label="旋轉 PDF" title="旋轉頁面"><RotateCw size={15} /></button>
+        <button className="icon-button" title="搜尋 PDF" aria-label="搜尋 PDF" aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><Search size={17} /></button>
+      </div><div className="page-controls" role="group" aria-label="PDF 翻頁">
+        <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁" title="上一頁"><ChevronLeft size={15} /></button>
+        <input value={pageInput} aria-label="頁碼" inputMode="numeric" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
+        <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁" title="下一頁"><ChevronRight size={15} /></button>
       </div><div className="pdf-pane-tools">{onPopout && <button className="icon-button" title="在新視窗閱讀" aria-label="在新視窗閱讀" onClick={onPopout}><ExternalLink size={16} /></button>}{onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
       {searchOpen && <div className="pdf-search"><Search size={15} /><input autoFocus placeholder="搜尋文獻中的文字…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') jumpSearch(e.shiftKey ? -1 : 1); }} aria-label="PDF 搜尋文字" />
         <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
@@ -238,7 +237,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
             highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
           : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
       </div>
-    </> : <div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div>}
+    </> : <>{onCollapse && <button className="icon-button empty-pdf-collapse" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}<div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div></>}
     {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={25} /><p>{busy}</p></div>}
   </section>;
 }
