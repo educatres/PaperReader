@@ -38,8 +38,10 @@ test('mercuryapi detects models on key save, tests the selected model, translate
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('連線成功');
   expect(requests.at(-1)).toMatchObject({ url: 'https://air.cgu.edu.tw/mercuryapi/v1/responses', body: { model: 'research/reading-v2', store: false, reasoning: { effort: 'high' }, input: expect.stringContaining('connection test') } });
+  await page.getByRole('dialog').evaluate(el => { el.scrollTop = 0; });
   await page.getByRole('dialog').screenshot({ path: 'test-results/mercuryapi-settings-desktop.png' });
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('dialog').evaluate(el => { el.scrollTop = 0; });
   await page.getByRole('dialog').screenshot({ path: 'test-results/mercuryapi-settings-mobile.png' });
   expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   for (const button of await page.locator('.provider-tabs > button').all()) await expect(button).toBeInViewport();

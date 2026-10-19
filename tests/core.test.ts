@@ -53,6 +53,17 @@ describe('portable data boundary', () => {
     delete w.jobs[0].reasoningEffort; delete w.notes[0].summary!.reasoningEffort;
     expect(validateWorkspace(w).jobs[0].reasoningEffort).toBeUndefined();
   });
+  it('roundtrips Grok results and resumable jobs with model-default reasoning', async () => {
+    const w = emptyWorkspace();
+    w.documents.push({ id: 'paper-1', name: 'Paper.pdf', sha256: 'a'.repeat(64), size: 10, pageCount: 1, pages: ['Evidence'], createdAt: now() });
+    const result = { text: 'Grok 摘要', provider: 'grok' as const, model: 'grok-text', createdAt: now(), usage: 42 };
+    w.notes.push({ ...manualNote(), summary: result });
+    w.jobs.push({ id: 'job-1', documentId: 'paper-1', provider: 'grok', model: 'grok-text', chunks: [{ text: 'Evidence', startPage: 1, endPage: 1 }], results: [result], status: 'paused', createdAt: now() });
+    const restored = await readImport(new File([JSON.stringify(w)], 'grok.json'));
+    expect(restored.workspace.notes[0].summary).toEqual(result);
+    expect(restored.workspace.jobs[0]).toEqual(w.jobs[0]);
+    expect(restored.workspace.jobs[0].reasoningEffort).toBeUndefined();
+  });
   it('preserves group provenance in backups after source deletion and rejects corrupt snapshots', () => {
     const w = emptyWorkspace(); w.notes = [manualNote(), { ...manualNote(), id: 'note-2', title: 'Another idea' }];
     w.edges = [{ id: 'relation-1', source: 'note-1', target: 'note-2', relationType: '支持', label: 'Evidence supports the idea', directed: true, createdBy: 'user', createdAt: now(), updatedAt: now() }];
@@ -82,11 +93,14 @@ describe('source-preserving text chunking', () => {
 });
 describe('session-only credentials', () => {
   it('clears independent providers without affecting research data', () => {
-    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b'); setKey('cgu', 'test-key-c'); setKey('mercuryapi', 'test-key-d');
+    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b'); setKey('cgu', 'test-key-c'); setKey('mercuryapi', 'test-key-d'); setKey('grok', 'test-key-e');
     expect(hasKey('openai')).toBe(true); expect(hasKey('gemini')).toBe(true);
     setKey('openai', ''); expect(hasKey('openai')).toBe(false); expect(hasKey('gemini')).toBe(true);
     expect(hasKey('cgu')).toBe(true); expect(hasKey('mercuryapi')).toBe(true);
+    expect(hasKey('grok')).toBe(true); setKey('grok', ''); expect(hasKey('grok')).toBe(false); expect(hasKey('mercuryapi')).toBe(true);
+    setKey('grok', 'test-key-e');
     clearAllKeys(); expect(hasKey('gemini')).toBe(false); expect(hasKey('cgu')).toBe(false); expect(hasKey('mercuryapi')).toBe(false);
+    expect(hasKey('grok')).toBe(false);
     expect(JSON.stringify(emptyWorkspace())).not.toContain('test-key');
   });
 });

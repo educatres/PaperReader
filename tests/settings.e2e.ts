@@ -129,6 +129,10 @@ test('older preferences retain custom models and adopt medium reasoning', async 
   await page.getByRole('button', { name: 'mercuryapi', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('');
   await expect(page.getByLabel('模型選項')).toHaveValue('');
+  await page.getByRole('button', { name: 'Grok（xAI）', exact: true }).click();
+  await expect(page.getByLabel('選擇模型')).toHaveValue('');
+  await expect(page.getByLabel('模型選項')).toHaveValue('');
+  await expect(page.getByLabel('推理程度')).toBeDisabled();
 });
 
 test('stored keys display a fixed mask and clearing removes the active provider key and draft only', async ({ page }) => {

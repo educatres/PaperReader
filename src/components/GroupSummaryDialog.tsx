@@ -4,7 +4,7 @@ import { Modal } from './Modal';
 import { useApp } from '../store';
 import { hasKey, providerName, runGroupAI, useAI, useCredentials } from '../lib/ai';
 import { connectedGroup, prepareGroupSummary } from '../lib/groupSummary';
-import { reasoningLabels } from '../types';
+import { reasoningLabels, usesReasoningEffort } from '../types';
 
 export function GroupSummaryDialog({ anchorId, close }: { anchorId: string; close: () => void }) {
   const { workspace, preferences } = useApp(); useCredentials();
@@ -24,7 +24,7 @@ export function GroupSummaryDialog({ anchorId, close }: { anchorId: string; clos
       <div className="group-preview-relations"><h3>連線如何影響摘要</h3><ul aria-label="將參考的連線">{group.edges.map((e, i) => <li key={e.id}><b>R{i + 1}</b><span>{refs.get(e.source)} {e.directed ? '→' : '↔'} {refs.get(e.target)}</span><strong>{e.relationType}</strong>{e.label && <p>{e.label}</p>}</li>)}</ul>
         <p className="field-help">AI 會整合共同主題、支持與對比，區分延伸想法及待驗證假說；人工連線不代表事實已獲證實。</p>
       </div>
-      <div className="privacy-card"><ShieldCheck size={21} /><div><strong>只傳送預覽這組便條與連線</strong><p>包含原文、既有翻譯／摘要、人工筆記、標籤、來源文件名稱與頁碼，以及關係類型、說明、方向。直接傳至 {providerName(provider)} · {models[provider] || '尚未選擇模型'} · {provider === 'gemini' ? '依模型預設推理' : `推理：${reasoningLabels[reasoningEffort]}`}。截圖只使用便條文字，無文字的截圖會標記內容缺失；不傳送或分析圖片，也不傳送 PDF 原檔或其他群組。</p></div></div>
+      <div className="privacy-card"><ShieldCheck size={21} /><div><strong>只傳送預覽這組便條與連線</strong><p>包含原文、既有翻譯／摘要、人工筆記、標籤、來源文件名稱與頁碼，以及關係類型、說明、方向。直接傳至 {providerName(provider)} · {models[provider] || '尚未選擇模型'} · {usesReasoningEffort(provider) ? `推理：${reasoningLabels[reasoningEffort]}` : '依模型預設推理'}。截圖只使用便條文字，無文字的截圖會標記內容缺失；不傳送或分析圖片，也不傳送 PDF 原檔或其他群組。</p></div></div>
       {preview.plan && <p className="field-help">約 {preview.plan.input.length.toLocaleString()} 字元，執行 1 次生成請求，費用依供應商帳戶。結果會成為新的紫色整合便條，附來源按鈕與產生時的內容快照；來源後續修改時，需重新生成摘要。</p>}
       {preview.error && <div className="inline-error" role="alert">{preview.error}</div>}
     </div>

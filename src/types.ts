@@ -1,5 +1,7 @@
 export type Color = 'yellow' | 'green' | 'pink' | 'blue';
-export type Provider = 'openai' | 'gemini' | 'cgu' | 'mercuryapi';
+export const providers = ['openai', 'cgu', 'gemini', 'mercuryapi', 'grok'] as const;
+export type Provider = typeof providers[number];
+export const usesReasoningEffort = (provider: Provider) => provider !== 'gemini' && provider !== 'grok';
 export const reasoningEfforts = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = typeof reasoningEfforts[number];
 export const reasoningLabels: Record<ReasoningEffort, string> = { low: '低', medium: '中', high: '高' };

@@ -2,9 +2,9 @@ import { create } from 'zustand';
 import { db, loadSharedState, commitChange, holdWindowStorage } from './lib/db';
 import { applyPatches, changesBetween, equal, invertPatches, rebasePatches, type Change, type ConflictDraft, type SyncVersion } from './lib/workspaceChanges';
 import { acknowledge, announceDocument, listenWindows, readerWindow, boardWindow, requestedDocument, requestedViewport, routeSource, send, startWindows, windowId } from './lib/windows';
-import { emptyWorkspace, now, uid, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
+import { emptyWorkspace, now, uid, providers, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
 
-const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
+const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
 function freshBoardWindow() { try { return boardWindow && sessionStorage.getItem('PaperReader.boardInstance') !== windowId; } catch { return boardWindow; } }
 function readView(): Partial<Workspace> { try { return JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}'); } catch { return {}; } }
 function saveView(workspace: Workspace) { try { sessionStorage.setItem('PaperReader.view', JSON.stringify({ activeDocumentId: workspace.activeDocumentId, viewport: workspace.viewport })); } catch { /* The view still works in memory. */ } announceDocument(workspace.activeDocumentId); }
@@ -14,8 +14,8 @@ function readPreferences(): Preferences {
     const shared = JSON.parse(localStorage.getItem('PaperReader.preferences') || '{}');
     const p = { ...shared, ...JSON.parse(sessionStorage.getItem('PaperReader.readingPreferences') || '{}') };
     const pdfCollapsed = freshBoardWindow() || p.pdfCollapsed === true;
-    return { ...defaultPreferences, provider: ['openai', 'gemini', 'cgu', 'mercuryapi'].includes(p.provider) ? p.provider : 'openai',
-      models: { openai: typeof p.models?.openai === 'string' ? p.models.openai : defaultPreferences.models.openai, gemini: typeof p.models?.gemini === 'string' ? p.models.gemini : '', cgu: typeof p.models?.cgu === 'string' ? p.models.cgu : defaultPreferences.models.cgu, mercuryapi: typeof p.models?.mercuryapi === 'string' ? p.models.mercuryapi : '' },
+    return { ...defaultPreferences, provider: providers.includes(p.provider) ? p.provider : 'openai',
+      models: { openai: typeof p.models?.openai === 'string' ? p.models.openai : defaultPreferences.models.openai, gemini: typeof p.models?.gemini === 'string' ? p.models.gemini : '', cgu: typeof p.models?.cgu === 'string' ? p.models.cgu : defaultPreferences.models.cgu, mercuryapi: typeof p.models?.mercuryapi === 'string' ? p.models.mercuryapi : '', grok: typeof p.models?.grok === 'string' ? p.models.grok : '' },
       reasoningEffort: reasoningEfforts.includes(p.reasoningEffort) ? p.reasoningEffort : 'medium', toolbarCollapsed: p.toolbarCollapsed === true,
       pdfCollapsed, boardCollapsed: !pdfCollapsed && p.boardCollapsed === true,
       split: typeof p.split === 'number' ? Math.max(30, Math.min(75, p.split)) : 54, lastPage: p.lastPage || {} };

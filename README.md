@@ -13,7 +13,7 @@
 1. 開啟網站，匯入 PDF，或點「先試讀一篇範例」。
 2. 螢光筆模式下跨行選字，放開滑鼠就會建立一組標記與便條。跨頁請分開標記。文字選取以灰色顯示，與黃色螢光標記區分；選「手掌模式」可拖曳移動 PDF，翻頁按鈕與頁碼位於閱讀面板上方。
 3. 拖曳便條標題整理白板；從四邊的連接點拖到另一張卡片，建立人工研究關係。雙擊連線可修改。
-4. 點「連接你的 AI」，選擇 OpenAI、CGU API、Google Gemini 或 mercuryapi，貼上自己的 API key，再選擇模型與測試連線。OpenAI／CGU 可直接選 `gpt-6-luna`、`gpt-5.6-luna`，或輸入自訂模型 ID；推理程度可選低／中／高，預設為中。
+4. 點「連接你的 AI」，選擇 OpenAI、CGU API、Google Gemini、mercuryapi 或 Grok（xAI），貼上自己的 API key，再選擇模型與測試連線。OpenAI／CGU 可直接選 `gpt-6-luna`、`gpt-5.6-luna`，或輸入自訂模型 ID；推理程度可選低／中／高，預設為中。Gemini 與 Grok 使用模型預設推理。
 5. 點便條翻譯／摘要，或確認全文摘要的文字傳送範圍。
 6. 定期匯出 `.researchpack`，包含 PDF、標記、筆記、連線與視角。從文獻庫可還原。
 7. 文件列右側可「隱藏工具列」以增加閱讀空間；按同一位置的「展開工具列」可恢復。收合狀態會記住，手機版以箭頭圖示操作。
@@ -56,6 +56,12 @@ AI 會收到這組便條的原文、既有翻譯／摘要、人工筆記、標�
 
 每次整合執行一個生成請求，使用目前設定的供應商、模型與推理程度，執行中可取消。單次輸入上限為 60,000 字元（含結構與標籤）；超過時請拆分群組或縮短內容，程式不會自動截斷。取消或失敗不會新增空白便條，可重新執行。金鑰沿用分頁記憶體保存方式。
 
+### Grok（xAI）連線
+
+Base URL 為 `https://api.x.ai/v1`。在「連接你的 AI → Grok（xAI）」貼上從 [xAI Console](https://console.x.ai/) 取得的 API key，按「使用此金鑰」即可自動查詢可用語言模型。程式只列出支援文字輸入與輸出的模型，保留仍可用的既有選擇，否則選取清單第一個模型；也可手動輸入模型 ID。
+
+模型偵測只查詢 `/language-models`，不產生文字生成用量。「測試連線」、翻譯、段落摘要、關聯摘要與全文摘要使用 Responses API，設定 `store: false`。不同 Grok 型號支援的推理參數不同，因此目前使用模型預設推理，不傳送 `reasoning.effort`。金鑰只暫存分頁記憶體，重新整理後需重新輸入；供應商與模型選擇會保留。詳見 [xAI 官方 API 文件](https://docs.x.ai/developers/rest-api-reference/inference/responses)。
+
 ### mercuryapi 連線
 
 Base URL 為 `https://air.cgu.edu.tw/mercuryapi/v1`。在「連接你的 AI → mercuryapi」填入自己的 API key，按「使用此金鑰」即自動查詢可用模型，並保留仍可用的既有選擇，否則選用清單第一個模型。可從下拉選單更換、手動輸入模型 ID，或按「自動偵測模型」重新查詢；清單為空時會提示確認模型權限。
@@ -95,7 +101,7 @@ Gemini 成功取得模型清單後，若可用文字模型中包含 `gemini-flas
 - 截圖便條的翻譯／摘要使用自行輸入的文字與筆記，不傳送或分析圖片；建立截圖不觸發 AI。
 - 關聯摘要確認後，只傳送預覽群組的便條文字與連線屬性，不傳送其他群組或原始 PDF。
 - 全文摘要先取得明確同意，再傳送**當前 PDF 的分塊文字**。不傳送原始 PDF、其他文獻或整個工作區。
-- OpenAI／CGU／mercuryapi 使用 Responses API，設 `store: false` 與 `reasoning.effort`；此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
+- OpenAI／CGU／mercuryapi 使用 Responses API，設 `store: false` 與 `reasoning.effort`；Grok 同樣使用 Responses API 與 `store: false`，推理採模型預設。此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
 - PDF、便條與 AI 回應都作為不可信內容處理。模型沒有工具權限，回應以 React 文字呈現，不執行 HTML。
 - 所有 JavaScript、PDF worker、字型、CJK 字元映射及 WebAssembly 隨網站提供，沒有第三方 CDN。CSP 限制連線至同源、OpenAI、CGU／mercuryapi 與 Gemini API 網域。
 - 模型清單由官方接口取得；清單可見不代表具備文字任務權限，請測試。使用者承擔供應商計費。
