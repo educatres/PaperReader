@@ -1,5 +1,5 @@
 export type Color = 'yellow' | 'green' | 'pink' | 'blue';
-export type Provider = 'openai' | 'gemini' | 'cgu';
+export type Provider = 'openai' | 'gemini' | 'cgu' | 'mercuryapi';
 export const reasoningEfforts = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = typeof reasoningEfforts[number];
 export const reasoningLabels: Record<ReasoningEffort, string> = { low: '低', medium: '中', high: '高' };

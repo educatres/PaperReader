@@ -7,7 +7,7 @@ import { now, reasoningEfforts, relations, type Workspace, type ImageAsset, type
 import { maxImageBytes, validateImageHeader } from './screenshots';
 
 const str = z.string().max(2_000_000); const id = z.string().min(1).max(100).regex(/^[\w-]+$/);
-const color = z.enum(['yellow', 'green', 'pink', 'blue']); const provider = z.enum(['openai', 'gemini', 'cgu']);
+const color = z.enum(['yellow', 'green', 'pink', 'blue']); const provider = z.enum(['openai', 'gemini', 'cgu', 'mercuryapi']);
 const reasoningEffort = z.enum(reasoningEfforts).optional();
 const point = z.object({ x: z.number().finite().min(-1e7).max(1e7), y: z.number().finite().min(-1e7).max(1e7) });
 const ai = z.object({ text: str, provider, model: z.string().max(200), reasoningEffort, createdAt: z.string().max(100), usage: z.number().nonnegative().optional() });
