@@ -59,7 +59,6 @@ export interface Workspace {
 }
 export interface Preferences {
   provider: Provider; models: Record<Provider, string>; reasoningEffort: ReasoningEffort; toolbarCollapsed: boolean;
-  cguConnection: 'direct' | 'localhost';
   split: number; lastPage: Record<string, number>;
 }
 export const colors: Record<Color, string> = {

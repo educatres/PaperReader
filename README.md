@@ -6,7 +6,7 @@
 
 繁體中文的私人研究工作台：**讀 PDF → 選字標記 → 來源便條 → 翻譯與摘要 → 知識白板 → 可攜備份**。
 
-前端可直接部署 GitHub Pages，CGU 另提供自行在電腦執行的 localhost 連線助手。沒有登入、遠端資料庫、分析追蹤或代管 API 代理。
+前端可直接部署 GitHub Pages，所有 AI 供應商均由瀏覽器直接連線。沒有登入、遠端資料庫、分析追蹤或代管 API 代理。
 
 ## 使用
 
@@ -50,19 +50,13 @@ Base URL 為 `https://air.cgu.edu.tw/mercuryapi/v1`。在「連接你的 AI → 
 
 依 [CGU 官方文件](https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html)，Base URL 為 `https://air.cgu.edu.tw/cgullmapi/v1`，使用 `Authorization: Bearer 金鑰` 與 Responses API。請先到 [CGU API Key 頁面](https://air.cgu.edu.tw/workspace4/LLMAPI/index.php) 啟用、複製金鑰。可直接貼上純金鑰，或包含 `Bearer`／`Authorization: Bearer` 前綴。
 
-**2026-10-18 實測，CGU 的 CORS 預檢拒絕 GitHub Pages 與本機開發來源（`Disallowed CORS origin`）**。預設使用自己的 localhost 助手：
+CGU 已支援 CORS，程式一律由瀏覽器以 HTTPS 直接連線。
 
-1. 安裝 [Node.js 24 或更新版本](https://nodejs.org/en/download)。
-2. 在「連接你的 AI → CGU API」下載 [本機助手](https://educatres.github.io/PaperReader/PaperReader-CGU-Bridge.mjs)。
-3. 在下載檔案所在的資料夾開啟終端機，執行 `node PaperReader-CGU-Bridge.mjs`，保持視窗開啟。已有專案的開發者可執行 `npm run cgu:bridge`（PowerShell 可用 `npm.cmd run cgu:bridge`）。
-4. 複製終端機顯示的 Pairing code，貼到設定中的「本機助手連線碼」，按「連接本機助手」。若瀏覽器詢問本機網路權限，請允許。
-5. 貼上自己的 CGU API key，按「驗證 CGU 金鑰」。此步只呼叫 `/models`，不送出文字生成。再選模型與推理程度，按「測試連線」進行少量用量的 Responses 文字測試。
+1. 在「連接你的 AI → CGU API」貼上自己的 CGU API key，按「驗證 CGU 金鑰」。此步只查詢 `/models`，不送出文字生成。
+2. 選擇模型與推理程度，按「測試連線」進行少量用量的 Responses 文字測試。
+3. 完成設定後即可翻譯便條、產生段落摘要或全文摘要。
 
-助手僅綁定 `127.0.0.1:43127`，每次啟動隨機產生連線碼，只接受 PaperReader 的 GitHub Pages 來源及 localhost／127.0.0.1 的 5173、4173 開發來源；不接受任意轉送網址。連接埠被占用時，關閉先前的助手再重啟。按 Ctrl+C 停止。重新整理網站須重填金鑰與連線碼，重啟助手須複製新的連線碼。
-
-連線助手不寫金鑰檔、不使用環境變數保存金鑰、不記錄請求或金鑰。金鑰僅經本機 HTTP loopback 的請求記憶體，再以 HTTPS 傳給固定的 CGU 官方 API。助手只允許健康檢查、模型清單及非串流 Responses，不轉送 Cookie 或連線碼至 CGU，不使用第三方代管代理。請在可信任的私人電腦使用；同機程式及同來源程式碼仍屬信任邊界。
-
-設定仍可選「瀏覽器直接連線」，但須由 CGU 管理員允許目前網站來源的 CORS。401 表示金鑰驗證失敗；403 也可能是模型權限或 Token／美元額度；404 應確認模型及 Responses 端點支援。自訂模型須支援 Responses，僅支援 Chat Completions 的模型目前不適用。模型是否開放、支援哪些推理程度，以帳戶權限與供應商為準；Gemini 沿用模型自身的推理預設。
+舊版連線方式設定會被忽略，供應商、模型與推理偏好保留。重新整理網站後需重新輸入金鑰。401 表示金鑰驗證失敗；403 也可能是模型權限或 Token／美元額度；404 應確認模型及 Responses 端點支援。自訂模型須支援 Responses，僅支援 Chat Completions 的模型目前不適用。
 
 ## 隱私與本機儲存
 
@@ -71,10 +65,10 @@ Base URL 為 `https://air.cgu.edu.tw/mercuryapi/v1`。在「連接你的 AI → 
 | PDF 原檔 | 此瀏覽器的 IndexedDB |
 | PDF 框選截圖 | 此瀏覽器的 IndexedDB，獨立 PNG Blob |
 | 文字索引、標記、便條、關係、白板視角、可接續摘要 | 此瀏覽器的 IndexedDB |
-| 模型 ID、推理程度、CGU 連線方式、工具列狀態、介面設定、閱讀頁碼 | 此瀏覽器的 localStorage，沒有金鑰 |
-| API key、助手連線碼 | **只暫存目前分頁記憶體；CGU 助手請求期間也會經過其記憶體** |
+| 模型 ID、推理程度、工具列狀態、介面設定、閱讀頁碼 | 此瀏覽器的 localStorage，沒有金鑰 |
+| API key | **只暫存目前分頁記憶體** |
 
-金鑰不寫入 localStorage、sessionStorage、IndexedDB、檔案、GitHub 或備份；重新整理／關閉分頁後清除。CGU 本機模式經自己的助手記憶體轉送，其餘直接由瀏覽器傳至所選供應商。呼叫雲端 API 時，金鑰須以 HTTPS 授權標頭傳給官方供應商驗證。
+金鑰不寫入 localStorage、sessionStorage、IndexedDB、檔案、GitHub 或備份；重新整理／關閉分頁後清除。所有供應商均直接由瀏覽器連線。呼叫雲端 API 時，金鑰須以 HTTPS 授權標頭傳給官方供應商驗證。
 
 已暫存的 API Key 在設定中以 `***` 表示；按「清除本機 API Key」可立即清除目前供應商在本分頁記憶體中的金鑰及尚未套用的輸入，保留 PDF 與研究便條。其他供應商的金鑰分別管理。
 
@@ -84,9 +78,9 @@ Gemini 成功取得模型清單後，若可用文字模型中包含 `gemini-flas
 - 截圖便條的翻譯／摘要使用自行輸入的文字與筆記，不傳送或分析圖片；建立截圖不觸發 AI。
 - 關聯摘要確認後，只傳送預覽群組的便條文字與連線屬性，不傳送其他群組或原始 PDF。
 - 全文摘要先取得明確同意，再傳送**當前 PDF 的分塊文字**。不傳送原始 PDF、其他文獻或整個工作區。
-- OpenAI／CGU 使用 Responses API，設 `store: false` 與 `reasoning.effort`；此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
+- OpenAI／CGU／mercuryapi 使用 Responses API，設 `store: false` 與 `reasoning.effort`；此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
 - PDF、便條與 AI 回應都作為不可信內容處理。模型沒有工具權限，回應以 React 文字呈現，不執行 HTML。
-- 所有 JavaScript、PDF worker、字型、CJK 字元映射及 WebAssembly 隨網站提供，沒有第三方 CDN。CSP 限制連線至同源、OpenAI、CGU、Gemini API 網域及固定的 `http://127.0.0.1:43127` 本機助手。
+- 所有 JavaScript、PDF worker、字型、CJK 字元映射及 WebAssembly 隨網站提供，沒有第三方 CDN。CSP 限制連線至同源、OpenAI、CGU／mercuryapi 與 Gemini API 網域。
 - 模型清單由官方接口取得；清單可見不代表具備文字任務權限，請測試。使用者承擔供應商計費。
 - 瀏覽器金鑰輸入適用於個人 BYOK 使用。請使用可信電腦、瀏覽器與擴充功能；應用程式更新與同源執行的程式碼仍屬信任邊界。
 
@@ -142,9 +136,9 @@ npm run test:e2e
 
 瀏覽器測試預設使用已安裝的 Microsoft Edge。其他系統可將 `playwright.config.ts` 的 `channel` 改成 `chromium` 並安裝 Playwright Chromium。可透過 `TEST_BASE_URL` 測試既有部署，例如 GitHub Pages 子路徑。
 
-測試涵蓋跨行標記、縮放與旋轉、持久化與雙向定位、人工筆記與連線、封裝備份／還原、三個供應商的 API 格式、模型選單與推理參數、429／連線失敗恢復、金鑰不落盤、長文摘要重新整理後以原推理設定接續、舊設定遷移、工具列收合與窄螢幕展開、離線還原、20 頁雙欄 PDF 按需渲染及掃描 PDF 提示。API 測試使用攔截回應，**不會讀取私人金鑰或產生真實 API 費用**。
+測試涵蓋跨行標記、縮放與旋轉、持久化與雙向定位、人工筆記與連線、封裝備份／還原、四個供應商的 API 格式、模型選單與推理參數、429／連線失敗恢復、金鑰不落盤、長文摘要重新整理後以原推理設定接續、舊設定遷移、工具列收合與窄螢幕展開、離線還原、20 頁雙欄 PDF 按需渲染及掃描 PDF 提示。API 測試使用攔截回應，**不會讀取私人金鑰或產生真實 API 費用**。
 
-CGU 助手另測試真實 localhost HTTP 配對與轉送、HTTPS 網站的本機網路權限、Bearer 貼上格式、驗證／生成分流、401／403／404、模型未開放、助手離線、重新整理清除金鑰及連線碼、匯出不含憑證。助手單元測試限制 Origin／Host／路徑／方法／標頭、輸入大小、串流拒絕、編碼標頭、上游逾時與取消，不呼叫真實 CGU。
+CGU 直連測試涵蓋舊連線設定相容性、Bearer 貼上格式、驗證／生成分流、401／403／404、模型未開放、重新整理清除金鑰與匯出不含憑證；所有 API 回應均為模擬資料。
 
 關聯摘要另驗證間接連通與循環、隱藏便條隔離、方向與關係類型保留、內容上限、紫色卡片與來源定位、復原／重做、備份還原、失敗／取消／重試，以及來源移除後的歷史快照相容性。
 
@@ -171,6 +165,6 @@ tests/            核心資料與瀏覽器驗收測試
 public/           本機範例 PDF、圖示與建置時複製的 PDF.js 資源
 ```
 
-原始規劃見 `PDF_AI_Research_Canvas_系統規格書_v1.0.md`。本版部署於 GitHub Pages，金鑰只暫存記憶體；因 CGU 的 CORS 限制，提供使用者自行啟動及配對的 localhost 助手，其餘供應商由前端直連。
+原始規劃見 `PDF_AI_Research_Canvas_系統規格書_v1.0.md`。本版部署於 GitHub Pages，金鑰只暫存記憶體；所有供應商由前端以 HTTPS 直接連線。
 
 介接參考：[OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[OpenAI Models](https://developers.openai.com/api/reference/resources/models/methods/list)、[Gemini generateContent](https://ai.google.dev/api/generate-content)、[Gemini Models](https://ai.google.dev/api/models)。第三方授權見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。

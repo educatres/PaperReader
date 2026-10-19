@@ -44,7 +44,7 @@ function slide(title, source) {
   text(s, title, 76, 58, 1440, 82, 48, C.green, true);
   text(s, 'PaperReader 使用指引', 76, 846, 700, 28, 19, C.muted);
   text(s, String(p.slides.items.length).padStart(2, '0'), 1472, 846, 55, 28, 19, C.muted);
-  s.speakerNotes.text = `PaperReader 操作說明，依 97c5833 版本。\n來源：${source}\n範例：public/sample.pdf，Reading as a Research Practice，原創三頁教學文件，非科學研究論文。\n畫面來自獨立的教學瀏覽器環境，不含私人憑證。AI 回應與模型清單為預先設定的教學示例，未向真實供應商發出生成請求。`;
+  s.speakerNotes.text = `PaperReader 操作說明，已更新 CGU 瀏覽器直接連線流程（2026-10-19）。\n來源：${source}\n範例：public/sample.pdf，Reading as a Research Practice，原創三頁教學文件，非科學研究論文。\n畫面來自獨立的教學瀏覽器環境，不含私人憑證。AI 回應與模型清單為預先設定的教學示例，未向真實供應商發出生成請求。`;
   return s;
 }
 function step(s, number, heading, detail, top) {
@@ -73,7 +73,7 @@ async function screenshot(s, name, x, y, width, height, region, alt = name) {
   text(s, '用內建範例練習 PDF 標記、研究便條與 AI 摘要', 112, 465, 1360, 70, 34);
   text(s, 'https://educatres.github.io/PaperReader/', 112, 663, 1360, 50, 30, C.green);
   text(s, '繁體中文桌面操作示範　2026.10', 112, 790, 1300, 40, 23, C.muted);
-  s.speakerNotes.text = 'PaperReader 線上網站：https://educatres.github.io/PaperReader/。本指引使用內建的原創教學 PDF。實作依據為 97c5833。';
+  s.speakerNotes.text = 'PaperReader 線上網站：https://educatres.github.io/PaperReader/。本指引使用內建的原創教學 PDF。已更新 CGU 瀏覽器直接連線流程（2026-10-19）。';
 }
 // 02. Overview.
 {
@@ -122,15 +122,15 @@ async function screenshot(s, name, x, y, width, height, region, alt = name) {
   await screenshot(s, '05-gemini', 622, 175, 865, 565, null, 'Gemini 設定、遮罩金鑰、清除按鈕及預設模型');
   text(s, '模型清單為教學示例，實際可用模型依帳戶而定。', 622, 738, 865, 35, 21, C.muted);
 }
-// 07. CGU local bridge instructions.
+// 07. CGU direct browser connection.
 {
-  const s = slide('CGU 本機連線助手', 'README.md CGU 連線、public/PaperReader-CGU-Bridge.mjs、06-cgu.png');
-  text(s, 'CGU 目前需透過自己的電腦轉送連線。', 76, 153, 1450, 50, 29);
-  step(s, 1, '下載並啟動助手', '安裝 Node.js 24 或更新版，\n在 CGU 設定下載本機助手。\n在下載資料夾執行下方指令。', 227);
-  step(s, 2, '配對與驗證', '保持終端機開啟，貼上\nPairing code 並連接助手。\n再填 CGU 金鑰並驗證。', 477);
-  text(s, '啟動指令：node PaperReader-CGU-Bridge.mjs', 76, 746, 1450, 43, 28, C.green, true);
-  text(s, '若瀏覽器詢問本機網路權限，請允許。', 76, 798, 1450, 37, 25);
-  await screenshot(s, '06-cgu', 609, 213, 916, 520, null, 'CGU localhost 助手下載、執行與連線碼輸入區');
+  const s = slide('CGU 瀏覽器直接連線', 'README.md CGU 連線、src/components/Settings.tsx、06-cgu.png');
+  text(s, '在「連接你的 AI」選 CGU API，即可由瀏覽器直接連線。', 76, 153, 1450, 50, 29);
+  step(s, 1, '貼上並驗證金鑰', '貼上自己的 CGU API key，\n按「驗證 CGU 金鑰」。\n這一步只查詢模型清單。', 227);
+  step(s, 2, '選擇模型並測試', '選擇模型與推理程度，\n按「測試連線」確認文字生成。\n測試會使用少量額度。', 477);
+  text(s, '金鑰與文字以 HTTPS 直接傳給 CGU。', 76, 746, 1450, 43, 28, C.green, true);
+  text(s, '模型清單為教學示例；實際可用模型依帳戶而定。', 76, 798, 1450, 37, 25);
+  await screenshot(s, '06-cgu', 609, 213, 916, 520, null, 'CGU 金鑰遮罩、驗證按鈕與模型選擇');
 }
 // 08. Single note AI operations.
 {

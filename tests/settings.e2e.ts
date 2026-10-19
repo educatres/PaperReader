@@ -53,7 +53,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   await page.getByRole('button', { name: '使用此金鑰' }).click();
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
   await expect(page.locator('.api-endpoint')).toContainText('https://air.cgu.edu.tw/cgullmapi/v1');
-  await page.getByLabel('CGU 連線方式').selectOption('direct');
+  await expect(page.getByLabel('CGU 連線方式')).toHaveCount(0);
   await expect(page.getByLabel('你的 API key')).toHaveValue('');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
   await expect(page.getByLabel('模型選項')).toHaveValue('gpt-6-luna');

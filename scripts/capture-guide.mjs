@@ -16,7 +16,9 @@ async function fresh() {
   // Mock every AI destination before entering a clearly fake teaching credential.
   await page.route(/https:\/\/(api\.openai\.com|generativelanguage\.googleapis\.com|air\.cgu\.edu\.tw)\//, route => {
     const req = route.request();
-    if (req.method() === 'GET') return route.fulfill({ json: { models: [{ name: 'models/gemini-flash-lite-latest', displayName: 'Gemini Flash Lite Latest', supportedGenerationMethods: ['generateContent'] }] } });
+    if (req.method() === 'GET') return route.fulfill({ json: req.url().includes('/cgullmapi/')
+      ? { data: [{ id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] }
+      : { models: [{ name: 'models/gemini-flash-lite-latest', displayName: 'Gemini Flash Lite Latest', supportedGenerationMethods: ['generateContent'] }] } });
     const body = req.postDataJSON(); const input = body.contents?.[0]?.parts?.[0]?.text || '';
     const text = input.includes('整合這組已連通') ? groupText : input.includes('忠實翻譯') ? translation : '這份教學文件建議讀者保留上下文，將閱讀問題連回來源，並區分原文與自己的解讀。';
     return route.fulfill({ json: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }], usageMetadata: { totalTokenCount: 80 } } });
@@ -118,7 +120,13 @@ try {
   const d = await fresh(); await d.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   await d.getByRole('button', { name: 'CGU API', exact: true }).click();
   await d.setViewportSize({ width: 1600, height: 1400 });
-  await shot(d, '06-cgu', d.locator('.cgu-connection'));
+  await d.getByLabel('你的 API key').fill('teaching-cgu-key-not-valid');
+  await d.getByRole('button', { name: '驗證 CGU 金鑰', exact: true }).click();
+  await d.locator('.settings-message.success').waitFor();
+  const body = await d.locator('.settings-body').boundingBox();
+  const key = await d.getByLabel('你的 API key').boundingBox();
+  const model = await d.getByLabel('模型選項').boundingBox();
+  await d.screenshot({ path: path.join(out, '06-cgu.png'), clip: { x: body.x, y: key.y - 40, width: body.width, height: model.y + model.height - key.y + 60 } });
   await writeFile(path.resolve('.guide-build/capture-info.json'), JSON.stringify({ capturedAt: new Date().toISOString(), base, source: 'public/sample.pdf', ai: 'Mocked teaching responses, no valid API key and no paid API calls.' }, null, 2));
 } finally {
   for (const context of contexts) await context.close();

@@ -38,8 +38,7 @@
 .toolbar-toggle:hover { background: #e4ecdb; }
 .provider-tabs > button { gap: 6px; padding: 10px 8px; font-size: 11px; }
 .api-endpoint { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: -6px 0 16px; font-size: 10px; color: #758269; }
-.api-endpoint code, .cgu-access-note code { overflow-wrap: anywhere; }
-.cgu-access-note { margin: -4px 0 16px; padding: 10px 12px; border-radius: 5px; background: #f6efdd; color: #877044; font-size: 10px; line-height: 1.9; }
+.api-endpoint code { overflow-wrap: anywhere; }
 .reasoning-field { margin-top: 18px; }
 .reasoning-field .full-input { margin-top: 0; }
 .group-summary-button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border: 1px solid #d8cfea; border-radius: 4px; background: #f0eaf8; color: #74608f; font-size: 10px; white-space: nowrap; }
@@ -92,13 +91,6 @@
   .provider-mark { font-size: 16px; }
 }
 .cgu-connection { margin-bottom: 20px; }
-.cgu-connection > .full-input { margin-top: 0; }
-.bridge-setup { padding: 14px; margin-top: 12px; background: #f5f7ee; border: 1px solid #e1e7d8; border-radius: 6px; font-size: 11px; line-height: 1.9; color: #627854; }
-.bridge-setup ol { padding-left: 20px; margin: 10px 0; }
-.bridge-setup li { margin: 7px 0; }
-.bridge-setup a, .cgu-connection a { text-decoration: underline; text-underline-offset: 3px; }
-.bridge-setup code { overflow-wrap: anywhere; }
-.bridge-setup .field-label { margin: 14px 0 0; }
-.bridge-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.cgu-connection a { text-decoration: underline; text-underline-offset: 3px; }
 .cgu-verify { margin-top: 14px; }
 .key-actions { flex-wrap: wrap; }
