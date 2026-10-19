@@ -100,6 +100,7 @@
 .cgu-connection a { text-decoration: underline; text-underline-offset: 3px; }
 .cgu-verify { margin-top: 14px; }
 .key-actions { flex-wrap: wrap; }
+.pdf-scroll { padding: 0; scrollbar-gutter: auto; }
 .pdf-toolbar > .pdf-tools { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; height: 100%; }
 .pdf-tools > * { flex-shrink: 0; }
 .pdf-pane-tools { display: flex; gap: 2px; border-left: 1px solid var(--line); padding-left: 5px; }

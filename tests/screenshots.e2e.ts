@@ -71,6 +71,7 @@ test('drag screenshots capture exact PDF pixels through zoom, rotation and DPR; 
   await page.getByRole('button', { name: '放大 PDF', exact: true }).click();
   await page.getByRole('button', { name: '旋轉 PDF', exact: true }).click();
   await expect(page.getByTestId('screenshot-selection-0')).toBeVisible();
+  await page.locator('.pdf-scroll').evaluate(element => { element.scrollLeft = element.scrollWidth; }); // Expose the right quadrant of the full-width page at 125% zoom.
   await drag(page, 0, { x: .85, y: .35 }, { x: .6, y: .1 }); // reverse drag in the rotated red quadrant
   await expect(card).toHaveCount(2); expect((await rendered(card.last().locator('.screenshot-thumbnail img'))).pixel).toEqual([255, 0, 0, 255]);
   await page.getByRole('button', { name: '適合寬度', exact: true }).click();

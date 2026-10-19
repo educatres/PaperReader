@@ -109,6 +109,11 @@ test('top page controls stay usable on desktop and mobile with the reading area 
     await expect(page.locator('.pdf-page[data-page-index="1"] .textLayer span').first()).toBeVisible();
     await controls.getByRole('button', { name: '上一頁', exact: true }).click();
     await expect(controls.getByLabel('頁碼', { exact: true })).toHaveValue('1');
+    await expect.poll(() => page.locator('.pdf-page').first().evaluate(element => {
+      const scroll = element.parentElement!;
+      const sheet = element.getBoundingClientRect(); const viewport = scroll.getBoundingClientRect();
+      return Math.max(Math.abs(sheet.x - viewport.x), Math.abs(sheet.y - viewport.y), Math.abs(sheet.width - scroll.clientWidth));
+    })).toBeLessThan(1);
     await controls.getByRole('button', { name: '下一頁', exact: true }).click();
     await expect(controls.getByLabel('頁碼', { exact: true })).toHaveValue('2');
     await page.screenshot({ path: `test-results/pdf-controls-${width}.png` });

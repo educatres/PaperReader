@@ -232,7 +232,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         onPointerDown={startPan} onPointerMove={movePan} onPointerCancel={stopPan} onLostPointerCapture={stopPan}
         onPointerUp={e => { if (pan.current) stopPan(e); else setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
         {error ? <div className="empty-panel"><ScanText size={35} /><h3>無法開啟 PDF</h3><p>{error}</p><button className="primary-button" onClick={onImport}>重新匯入 PDF</button></div> : pdf ?
-          Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${documentEpoch}-${i}`} pdf={pdf} documentId={paper.id} pageIndex={i} width={Math.max(220, paneWidth - 64) * zoom} rotation={rotation} mode={mode}
+          Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${documentEpoch}-${i}`} pdf={pdf} documentId={paper.id} pageIndex={i} width={Math.max(1, paneWidth) * zoom} rotation={rotation} mode={mode}
             focusedScreenshot={screenshotSource?.pageIndex === i ? screenshotSource : undefined}
             highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
           : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
