@@ -34,7 +34,7 @@ async function mark(page: Page, n: number, line = 0) {
 async function snapshot(page: Page): Promise<any> {
   return page.evaluate(() => new Promise((resolve, reject) => {
     const opening = indexedDB.open('PaperReader'); opening.onerror = () => reject(opening.error);
-    opening.onsuccess = () => { const database = opening.result; const request = database.transaction('workspaces').objectStore('workspaces').get('default'); request.onsuccess = () => { database.close(); resolve(request.result); }; request.onerror = () => reject(request.error); };
+    opening.onsuccess = () => { const database = opening.result; const request = database.transaction('workspacesV2').objectStore('workspacesV2').get('default'); request.onsuccess = () => { database.close(); resolve(request.result); }; request.onerror = () => reject(request.error); };
   }));
 }
 async function boardView(page: Page) {

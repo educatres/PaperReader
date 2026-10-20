@@ -9,6 +9,10 @@ import { colors, uid, now, type Color, type Highlight, type Screenshot } from '.
 import { ScreenshotSelection } from './ScreenshotSelection';
 import { rotateRegion } from '../lib/screenshots';
 import { focusSharedNote, readerWindow } from '../lib/windows';
+import { Languages } from 'lucide-react';
+import { PdfTranslationDialog } from './PdfTranslationDialog';
+import { PdfTranslationMarkers } from './PdfTranslationMarkers';
+import { usePdfTranslation } from '../lib/pdfTranslation';
 
 function useDocumentSetting<T extends string | number>(documentId: string, name: string, fallback: T, valid: (value: unknown) => boolean): [T, (action: SetStateAction<T>) => void] {
   const [cache, setCache] = useState<Record<string, T>>({});
@@ -21,11 +25,12 @@ function useDocumentSetting<T extends string | number>(documentId: string, name:
   }];
 }
 
-function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights, focused, focusedScreenshot, focusSerial, scrollRoot, onActivate, onFocusNote, onUnresolved }: {
+function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights, focused, focusedScreenshot, focusSerial, scrollRoot, onActivate, onFocusNote, onUnresolved, showTranslations }: {
   pdf: PDFDocumentProxy; pageIndex: number; width: number; rotation: number; mode: string;
   documentId: string; focusedScreenshot?: Screenshot;
   highlights: Highlight[]; focused?: string; focusSerial: number; scrollRoot: HTMLElement | null;
   onActivate: (page: number) => void; onFocusNote: (id: string) => void; onUnresolved: (id: string) => void;
+  showTranslations: boolean;
 }) {
   const pageRef = useRef<HTMLDivElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +97,7 @@ function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights
         <button key={`${h.id}-${i}`} data-highlight-id={h.id} title={`定位便條：${h.selectedText.slice(0, 50)}`} aria-label={`定位便條：${h.selectedText.slice(0, 30)}`}
           className={`pdf-highlight ${focused === h.id ? 'focused' : ''}`} style={{ left: `${q.x * 100}%`, top: `${q.y * 100}%`, width: `${q.width * 100}%`, height: `${q.height * 100}%`, backgroundColor: colors[h.color] }}
           onPointerDown={e => e.stopPropagation()} onClick={() => onFocusNote(h.noteId)} />))}</div>
+      {ready && showTranslations && <PdfTranslationMarkers documentId={documentId} pageIndex={pageIndex} width={width} height={width * ratio} rotation={Number(pageRef.current?.dataset.rotation || 0)} scrollRoot={scrollRoot} blocked={mode === 'screenshot'} />}
       {ready && mode === 'screenshot' && canvasRef.current && <ScreenshotSelection key={`${width}-${rotation}`} canvas={canvasRef.current} documentId={documentId} pageIndex={pageIndex} rotation={Number(pageRef.current?.dataset.rotation || 0)} />}
       {ready && sourceRegion && <div className="screenshot-source-region" aria-label="截圖來源區域" style={{ left: `${sourceRegion.x * 100}%`, top: `${sourceRegion.y * 100}%`, width: `${sourceRegion.width * 100}%`, height: `${sourceRegion.height * 100}%` }} />}
       {!ready && !error && <span className="page-loading"><LoaderCircle className="spin" size={22} /></span>}
@@ -104,6 +110,10 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   const { workspace, preferences, focusHighlightId, focusScreenshotNoteId, sourceFocusSerial, documentEpoch } = useApp();
   const paper = workspace.documents.find(d => d.id === workspace.activeDocumentId);
   const [pdf, setPdf] = useState<PDFDocumentProxy>(); const [error, setError] = useState('');
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const [translationVisibility, setTranslationVisibility] = useDocumentSetting<'yes' | 'no'>(paper?.id || '', 'translations', 'yes', v => v === 'yes' || v === 'no');
+  const translationActive = usePdfTranslation(s => s.active);
+  useEffect(() => { setTranslationOpen(false); }, [paper?.id]);
   const [mode, setMode] = useDocumentSetting<'highlight' | 'select' | 'pan' | 'screenshot'>(paper?.id || '', 'mode', 'highlight', value => ['highlight', 'select', 'pan', 'screenshot'].includes(String(value))); const [color, setColor] = useState<Color>('yellow');
   const [zoom, setZoom] = useDocumentSetting<number>(paper?.id || '', 'zoom', 1, value => typeof value === 'number' && value >= .5 && value <= 2.5);
   const [rotation, setRotation] = useDocumentSetting<number>(paper?.id || '', 'rotation', 0, value => typeof value === 'number' && [0, 90, 180, 270].includes(value));
@@ -223,7 +233,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         <button className="icon-button" onClick={() => goToPage(page - 1)} disabled={page <= 1} aria-label="上一頁" title="上一頁"><ChevronLeft size={15} /></button>
         <input value={pageInput} aria-label="頁碼" inputMode="numeric" onChange={e => setPageInput(e.target.value)} onBlur={() => goToPage(Number(pageInput) || 1)} onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(pageInput) || 1); }} /><span>/ {paper.pageCount}</span>
         <button className="icon-button" onClick={() => goToPage(page + 1)} disabled={page >= paper.pageCount} aria-label="下一頁" title="下一頁"><ChevronRight size={15} /></button>
-      </div><div className="pdf-pane-tools">{onPopout && <button className="icon-button" title="在新視窗閱讀" aria-label="在新視窗閱讀" onClick={onPopout}><ExternalLink size={16} /></button>}{onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
+      </div><div className="pdf-pane-tools"><button className="icon-button" title="逐段翻譯" aria-label="逐段翻譯" onClick={() => setTranslationOpen(true)}>{translationActive ? <LoaderCircle size={16} className="spin" /> : <Languages size={16} />}</button>{onPopout && <button className="icon-button" title="在新視窗閱讀" aria-label="在新視窗閱讀" onClick={onPopout}><ExternalLink size={16} /></button>}{onCollapse && <button className="icon-button" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}</div></div>
       {searchOpen && <div className="pdf-search"><Search size={15} /><input autoFocus placeholder="搜尋文獻中的文字…" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') jumpSearch(e.shiftKey ? -1 : 1); }} aria-label="PDF 搜尋文字" />
         <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
       {noText && <div className="ocr-notice"><ScanText size={15} />這一頁需要 OCR 才能文字標註；可使用截圖模式留存。</div>}
@@ -233,11 +243,13 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         onPointerUp={e => { if (pan.current) stopPan(e); else setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
         {error ? <div className="empty-panel"><ScanText size={35} /><h3>無法開啟 PDF</h3><p>{error}</p><button className="primary-button" onClick={onImport}>重新匯入 PDF</button></div> : pdf ?
           Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${documentEpoch}-${i}`} pdf={pdf} documentId={paper.id} pageIndex={i} width={Math.max(1, paneWidth) * zoom} rotation={rotation} mode={mode}
+            showTranslations={translationVisibility === 'yes'}
             focusedScreenshot={screenshotSource?.pageIndex === i ? screenshotSource : undefined}
             highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
           : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
       </div>
     </> : <>{onCollapse && <button className="icon-button empty-pdf-collapse" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}<div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div></>}
     {busy && <div className="busy-overlay"><LoaderCircle className="spin" size={25} /><p>{busy}</p></div>}
+    {translationOpen && paper && <PdfTranslationDialog documentId={paper.id} close={() => setTranslationOpen(false)} shown={translationVisibility === 'yes'} setShown={shown => setTranslationVisibility(shown ? 'yes' : 'no')} />}
   </section>;
 }

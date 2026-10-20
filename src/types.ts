@@ -54,9 +54,39 @@ export interface SummaryJob {
   chunks: Chunk[]; results: (AIResult | null)[]; status: 'paused' | 'running' | 'failed' | 'complete';
   error?: string; resultNoteId?: string; createdAt: string;
 }
+export interface PdfLayout {
+  id: string; documentId: string; documentHash: string; layoutVersion: number;
+  pageIndex: number; width: number; height: number; rotation: number; viewBox: number[];
+  warnings: string[];
+}
+export interface PdfParagraph {
+  id: string; documentId: string; layoutId: string; layoutVersion: number;
+  pageIndex: number; regionId: string; columnId: number; order: number;
+  rawText: string; normalizedText: string; sourceHash: string; itemIndices: number[];
+  lines: Quad[]; columnBounds: { left: number; right: number };
+  role: 'text' | 'heading' | 'caption' | 'excluded' | 'review'; reason?: string;
+}
+export interface PdfTranslation extends AIResult {
+  id: string; documentId: string; paragraphId: string; sourceHash: string; layoutVersion: number;
+}
+export interface PdfTranslationPart {
+  start: number; end: number; result?: AIResult;
+}
+export interface PdfTranslationTarget {
+  paragraphId: string; sourceHash: string; parts: PdfTranslationPart[];
+  status: 'pending' | 'running' | 'translated' | 'failed'; error?: string;
+}
+export interface PdfTranslationJob {
+  id: string; documentId: string; documentHash: string; layoutVersion: number;
+  provider: Provider; model: string; reasoningEffort?: ReasoningEffort;
+  targets: PdfTranslationTarget[];
+  status: 'pending' | 'running' | 'paused' | 'partial' | 'failed' | 'complete';
+  error?: string; createdAt: string; updatedAt: string;
+}
 export interface Workspace {
-  schemaVersion: 1; id: string; title: string; documents: Paper[]; activeDocumentId?: string;
+  schemaVersion: 2; id: string; title: string; documents: Paper[]; activeDocumentId?: string;
   highlights: Highlight[]; notes: Note[]; edges: Relation[]; jobs: SummaryJob[];
+  pdfLayouts: PdfLayout[]; pdfParagraphs: PdfParagraph[]; pdfTranslations: PdfTranslation[]; pdfTranslationJobs: PdfTranslationJob[];
   viewport: Viewport; updatedAt: string;
 }
 export interface Preferences {
@@ -69,6 +99,7 @@ export const colors: Record<Color, string> = {
 export const uid = () => crypto.randomUUID();
 export const now = () => new Date().toISOString();
 export const emptyWorkspace = (): Workspace => ({
-  schemaVersion: 1, id: 'default', title: '我的研究空間', documents: [], highlights: [], notes: [],
+  schemaVersion: 2, id: 'default', title: '我的研究空間', documents: [], highlights: [], notes: [],
+  pdfLayouts: [], pdfParagraphs: [], pdfTranslations: [], pdfTranslationJobs: [],
   edges: [], jobs: [], viewport: { x: 35, y: 50, zoom: 0.85 }, updatedAt: now(),
 });

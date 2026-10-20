@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import { emptyWorkspace, uid, type ImageAsset, type Workspace } from '../types';
 import { applyPatches, changesBetween, type Change, type ConflictDraft, type SyncVersion } from './workspaceChanges';
+import { upgradeWorkspace } from './workspaceVersion';
 
 class PaperReaderDB extends Dexie {
   workspaces!: Table<Workspace, string>;
@@ -13,11 +14,26 @@ class PaperReaderDB extends Dexie {
     this.version(1).stores({ workspaces: 'id', documents: 'id' });
     this.version(2).stores({ workspaces: 'id', documents: 'id', assets: 'id' });
     this.version(3).stores({ workspaces: 'id', documents: 'id', assets: 'id', sync: 'id', drafts: 'id' });
+    this.version(4).stores({ workspaces: 'id', documents: 'id', assets: 'id', sync: 'id', drafts: 'id' }).upgrade(async transaction => {
+      await transaction.table('workspaces').toCollection().modify(record => Object.assign(record, upgradeWorkspace(record)));
+    });
+    // Dexie can reopen a newer DB using an older declared version. Move the
+    // workspace store so a v1 client cannot silently write over v2 research.
+    this.version(5).stores({ workspacesV2: 'id' }).upgrade(async transaction => {
+      const records = await transaction.table('workspaces').toArray();
+      await transaction.table('workspacesV2').bulkPut(records.map(upgradeWorkspace));
+    });
+    this.version(6).stores({ workspaces: null });
+    this.workspaces = this.table('workspacesV2');
+    this.on('versionchange', () => {
+      this.close(); window.dispatchEvent(new Event('paperreader-database-upgraded'));
+    });
   }
 }
 export const db = new PaperReaderDB();
 export async function loadWorkspace() {
-  return db.workspaces.get('default');
+  const workspace = await db.workspaces.get('default');
+  return workspace ? upgradeWorkspace(workspace) : undefined;
 }
 export async function loadSharedState() {
   return db.transaction('rw', db.workspaces, db.sync, async () => {

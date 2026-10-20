@@ -94,7 +94,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   const persisted = await page.evaluate(async () => {
     const open = indexedDB.open('PaperReader');
     const db: IDBDatabase = await new Promise(resolve => { open.onsuccess = () => resolve(open.result); });
-    const read = db.transaction('workspaces').objectStore('workspaces').getAll();
+    const read = db.transaction('workspacesV2').objectStore('workspacesV2').getAll();
     const data = await new Promise(resolve => { read.onsuccess = () => resolve(read.result); });
     db.close();
     return JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, data });

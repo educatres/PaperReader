@@ -12,6 +12,7 @@ import { hasKey, useCredentials, useAI, cancelTask, clearAllKeys, providerName }
 import { importPdf, resetPdfCache } from './lib/pdf';
 import { exportJSON, exportMarkdown, exportPack, readImport, restoreImport } from './lib/transfer';
 import { emptyWorkspace, type Viewport } from './types';
+import { pausePdfTranslation, usePdfTranslation } from './lib/pdfTranslation';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
@@ -23,9 +24,9 @@ function ExportDialog({ close }: { close: () => void }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState('');
   return <Modal title="帶走你的研究" description="定期下載備份，讓研究成果多一份保障。" onClose={close}>
     <div className="export-options"><button disabled={busy} onClick={async () => { setBusy(true); setError(''); try { await exportPack(); toast('研究封裝已下載'); close(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }}>
-      <span className="export-icon primary">{busy ? <LoaderCircle className="spin" /> : <FileArchive size={24} />}</span><div><strong>完整研究封裝<span className="recommended">建議備份</span></strong><p>PDF、截圖圖片、標記、便條與連線，完整還原到另一台電腦。</p><small>.researchpack · 可重新匯入</small></div><ArrowUpRight size={18} /></button>
+      <span className="export-icon primary">{busy ? <LoaderCircle className="spin" /> : <FileArchive size={24} />}</span><div><strong>完整研究封裝<span className="recommended">建議備份</span></strong><p>PDF、截圖、標記、便條、連線與逐段譯文，完整還原到另一台電腦。</p><small>.researchpack · v2，需新版 PaperReader</small></div><ArrowUpRight size={18} /></button>
       <button disabled={busy} onClick={() => { exportMarkdown(); close(); }}><span className="export-icon"><NotebookPen size={24} /></span><div><strong>Markdown 研究筆記</strong><p>保留原文、頁碼、翻譯、筆記與人工關係。</p><small>.md · 適合寫作與整理</small></div><ArrowUpRight size={18} /></button>
-      <button disabled={busy} onClick={() => { exportJSON(); close(); }}><span className="export-icon"><Braces size={24} /></span><div><strong>JSON 註記資料</strong><p>保留文字與附件資訊，不含 PDF 原檔或截圖圖片。</p><small>.json · 完整圖片請使用研究封裝</small></div><ArrowUpRight size={18} /></button>
+      <button disabled={busy} onClick={() => { exportJSON(); close(); }}><span className="export-icon"><Braces size={24} /></span><div><strong>JSON 註記資料</strong><p>保留文字、逐段譯文與附件資訊，不含 PDF 原檔或截圖圖片。</p><small>.json · v2，完整圖片請使用研究封裝</small></div><ArrowUpRight size={18} /></button>
     </div>{error && <div className="inline-error export-error">{error}</div>}<div className="export-footnote"><LockKeyhole size={14} />所有匯出檔都不包含 API key。</div>
   </Modal>;
 }
@@ -98,7 +99,7 @@ function AppContent() {
     catch (e) { toast((e as Error).message, 'error'); }
   }
   async function restore(file: File) {
-    if (full || Object.keys(useAI.getState().running).length) { toast('請先完成或取消 AI 任務，再還原研究空間。', 'error'); return; }
+    if (full || Object.keys(useAI.getState().running).length || usePdfTranslation.getState().active) { toast('請先完成或取消 AI 任務，再還原研究空間。', 'error'); return; }
     setBusy('正在驗證研究封裝…');
     try { const pack = await readImport(file);
       if (confirm(`將還原「${pack.workspace.title}」：${pack.workspace.documents.length} 篇文獻、${pack.workspace.notes.length} 張便條。這會取代目前的研究空間；請先確認已下載備份。是否繼續？`)) await restoreImport(pack);
@@ -109,10 +110,14 @@ function AppContent() {
     const count = workspace.notes.filter(n => n.documentId === id).length;
     if (!confirm(`移除此 PDF 與其 ${count} 張便條、標記及連線？可用復原恢復。`)) return;
     workspace.jobs.filter(j => j.documentId === id && j.status === 'running').forEach(j => cancelTask(j.id));
-    useApp.getState().edit(w => { const ids = w.notes.filter(n => n.documentId === id).map(n => n.id); w.documents = w.documents.filter(d => d.id !== id); w.notes = w.notes.filter(n => !ids.includes(n.id)); w.highlights = w.highlights.filter(h => h.documentId !== id); w.edges = w.edges.filter(e => !ids.includes(e.source) && !ids.includes(e.target)); w.jobs = w.jobs.filter(j => j.documentId !== id); if (w.activeDocumentId === id) w.activeDocumentId = w.documents[0]?.id; });
+    if (usePdfTranslation.getState().active?.documentId === id) pausePdfTranslation();
+    useApp.getState().edit(w => { const ids = w.notes.filter(n => n.documentId === id).map(n => n.id); w.documents = w.documents.filter(d => d.id !== id); w.notes = w.notes.filter(n => !ids.includes(n.id)); w.highlights = w.highlights.filter(h => h.documentId !== id); w.edges = w.edges.filter(e => !ids.includes(e.source) && !ids.includes(e.target)); w.jobs = w.jobs.filter(j => j.documentId !== id);
+      w.pdfLayouts = w.pdfLayouts.filter(l => l.documentId !== id); w.pdfParagraphs = w.pdfParagraphs.filter(p => p.documentId !== id);
+      w.pdfTranslations = w.pdfTranslations.filter(t => t.documentId !== id); w.pdfTranslationJobs = w.pdfTranslationJobs.filter(j => j.documentId !== id);
+      if (w.activeDocumentId === id) w.activeDocumentId = w.documents[0]?.id; });
   }
   async function clearWorkspace() {
-    if (full || Object.keys(useAI.getState().running).length) { toast('請先取消執行中的 AI 任務。', 'error'); return; }
+    if (full || Object.keys(useAI.getState().running).length || usePdfTranslation.getState().active) { toast('請先取消執行中的 AI 任務。', 'error'); return; }
     if (!confirm('永久清除此網站在本機的所有 PDF、便條、連線與 API key？這無法復原，請先下載研究封裝備份。')) return;
     useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
     await flushSave(); clearAllKeys();
@@ -130,6 +135,7 @@ function AppContent() {
       {blockedNotice}<PdfViewer onImport={() => fileRef.current?.click()} busy={busy} onPopout={() => active && popout(active.id)} />
       {!active && <p className="reader-missing-document">原文獻已移除或尚未選擇；可從上方選擇文獻，或開啟研究白板匯入。</p>}
       <input ref={fileRef} type="file" accept="application/pdf,.pdf" multiple hidden data-testid="pdf-input" onChange={e => { if (e.target.files) void handleFiles([...e.target.files]); }} />
+      {settingsOpen && <Settings close={() => useApp.setState({ settingsOpen: false })} />}
       <SyncConflicts />{currentToast && <Toast />}</div>;
   }
   return <div className={`app-shell${preferences.toolbarCollapsed ? ' toolbar-collapsed' : ''}`} onDragEnter={e => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); dragDepth.current++; setDragging(true); } }} onDragLeave={e => { e.preventDefault(); dragDepth.current--; if (dragDepth.current <= 0) setDragging(false); }} onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); if (e.dataTransfer.files.length) void handleFiles([...e.dataTransfer.files]); }}>

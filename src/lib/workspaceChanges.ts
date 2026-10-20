@@ -1,6 +1,6 @@
 import { now, type Workspace } from '../types';
 
-export const collections = ['documents', 'notes', 'highlights', 'edges', 'jobs'] as const;
+export const collections = ['documents', 'notes', 'highlights', 'edges', 'jobs', 'pdfLayouts', 'pdfParagraphs', 'pdfTranslations', 'pdfTranslationJobs'] as const;
 type Collection = typeof collections[number];
 export interface Patch { collection: Collection | 'workspace'; id?: string; field?: string; before?: unknown; after?: unknown }
 export interface Change { id: string; epoch: string; patches: Patch[] }
@@ -51,6 +51,13 @@ export function applyPatches(workspace: Workspace, patches: Patch[], check = tru
   }
   const docs = new Set(next.documents.map(d => d.id)); const notes = new Set(next.notes.map(n => n.id)); const highlights = new Set(next.highlights.map(h => h.id));
   if (next.highlights.some(h => !docs.has(h.documentId) || !notes.has(h.noteId)) || next.notes.some(n => n.documentId && !docs.has(n.documentId) || n.highlightId && !highlights.has(n.highlightId)) || next.edges.some(e => !notes.has(e.source) || !notes.has(e.target)) || next.jobs.some(j => !docs.has(j.documentId))) return;
+  const layouts = new Map(next.pdfLayouts.map(l => [l.id, l]));
+  const paragraphs = new Map(next.pdfParagraphs.map(p => [p.id, p]));
+  const papers = new Map(next.documents.map(d => [d.id, d]));
+  if (next.pdfLayouts.some(l => papers.get(l.documentId)?.sha256 !== l.documentHash)
+    || next.pdfParagraphs.some(p => layouts.get(p.layoutId)?.documentId !== p.documentId || layouts.get(p.layoutId)?.pageIndex !== p.pageIndex || layouts.get(p.layoutId)?.layoutVersion !== p.layoutVersion || !docs.has(p.documentId))
+    || next.pdfTranslations.some(t => paragraphs.get(t.paragraphId)?.sourceHash !== t.sourceHash || paragraphs.get(t.paragraphId)?.documentId !== t.documentId || paragraphs.get(t.paragraphId)?.layoutVersion !== t.layoutVersion)
+    || next.pdfTranslationJobs.some(j => papers.get(j.documentId)?.sha256 !== j.documentHash || j.targets.some(t => paragraphs.get(t.paragraphId)?.documentId !== j.documentId || paragraphs.get(t.paragraphId)?.sourceHash !== t.sourceHash || paragraphs.get(t.paragraphId)?.layoutVersion !== j.layoutVersion))) return;
   next.updatedAt = now();
   return next;
 }

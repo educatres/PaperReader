@@ -4,7 +4,7 @@ import { resolveConflict, useApp } from '../store';
 import { Modal } from './Modal';
 import { patchValue } from '../lib/workspaceChanges';
 
-const collectionNames = { documents: '文獻', notes: '便條', highlights: '螢光標記', edges: '便條關係', jobs: '全文摘要任務', workspace: '研究空間' };
+const collectionNames = { documents: '文獻', notes: '便條', highlights: '螢光標記', edges: '便條關係', jobs: '全文摘要任務', pdfLayouts: 'PDF 版面', pdfParagraphs: 'PDF 段落', pdfTranslations: 'PDF 譯文', pdfTranslationJobs: '逐段翻譯任務', workspace: '研究空間' };
 const fieldNames: Record<string, string> = { title: '標題', name: '名稱', userNotes: '我的筆記', originalText: '原文／參考文字', translation: '翻譯', summary: 'AI 摘要', tags: '標籤', color: '顏色', position: '白板位置', width: '寬度', hidden: '隱藏狀態', collapsed: '收合狀態', relationType: '關係類型', label: '關係說明', directed: '箭頭方向', status: '狀態', results: '摘要內容' };
 function readable(value: unknown) {
   if (value === undefined) return '（已刪除或未設定）';

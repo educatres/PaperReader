@@ -121,7 +121,7 @@ test('API keys are session-only; OpenAI and Gemini requests keep output separate
   await page.locator('.note-tabs').getByRole('button', { name: '翻譯', exact: true }).click(); await expect(page.locator('.note-content')).toContainText('這是測試翻譯。');
   const persisted = await page.evaluate(async () => {
     const request = indexedDB.open('PaperReader'); const database: IDBDatabase = await new Promise(r => { request.onsuccess = () => r(request.result); });
-    const tx = database.transaction('workspaces'); const read = tx.objectStore('workspaces').getAll();
+    const tx = database.transaction('workspacesV2'); const read = tx.objectStore('workspacesV2').getAll();
     const data = await new Promise(r => { read.onsuccess = () => r(read.result); });
     return JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, data });
   });

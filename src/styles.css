@@ -161,3 +161,24 @@
   .open-paper-window, .remove-paper { opacity: 1; }
   .sync-conflict-field > div { grid-template-columns: 1fr; }
 }
+
+/* Paragraph translations stay separate from highlights and the PDF canvas. */
+.pdf-translation-layer{position:absolute;inset:0;z-index:4;pointer-events:none}
+.pdf-translation-marker{position:absolute;display:flex;align-items:center;justify-content:center;width:24px;height:24px;transform:translate(-50%,-50%);padding:0;border:0;border-radius:5px;background:#f5f8edeb;color:#557252;pointer-events:auto;cursor:pointer;box-shadow:0 1px 3px #253d2220;touch-action:manipulation}
+.pdf-translation-marker:hover,.pdf-translation-marker:focus-visible,.pdf-translation-marker[aria-expanded=true]{background:#e2edd7;color:#294c30;outline:1px solid #8aa477}
+.pdf-translation-layer.blocked .pdf-translation-marker{pointer-events:none;opacity:.4}
+.translation-source-outline{position:absolute;outline:1px solid #6d946a80;background:#8ab5820c;pointer-events:none}
+.translation-popover{position:fixed;z-index:35;box-sizing:border-box;width:max-content;max-width:min(320px,calc(100vw - 24px));max-height:min(240px,40vh);overflow:auto;overscroll-behavior:contain;padding:10px 12px;background:#fffef8;color:#374632;border:1px solid #d2ddc5;border-radius:7px;box-shadow:0 4px 18px #253d2226;font:14px/1.6 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;user-select:text;cursor:text}
+.translation-popover:focus-visible{outline:2px solid #8aa477;outline-offset:2px}
+.pdf-translation-dialog{padding:8px 24px 20px;color:#526349;font-size:13px;line-height:1.7}
+.pdf-translation-dialog>strong{display:block;overflow-wrap:anywhere}
+.pdf-translation-dialog>p{margin:12px 0}
+.translation-visibility{display:flex;gap:8px;align-items:center;margin:14px 0}
+.translation-visibility input{accent-color:#557252}
+.translation-progress{display:flex;gap:10px;align-items:center;margin:12px 0;flex-wrap:wrap}
+.translation-progress progress{accent-color:#77966b;width:100%}
+.translation-error{background:#fff0e6;border:1px solid #e6cbbb;padding:8px 10px;border-radius:5px;color:#965f41;overflow-wrap:anywhere}
+.pdf-translation-dialog details{margin:12px 0;border-top:1px solid #e1e7d9;padding-top:8px}
+.pdf-translation-dialog details p{font-size:12px;overflow-wrap:anywhere}
+.translation-actions{flex-wrap:wrap}
+@media(pointer:coarse){.pdf-translation-marker{width:44px;height:44px;background:transparent}.pdf-translation-marker svg{background:#f5f8edeb;border-radius:3px}}

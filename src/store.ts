@@ -63,6 +63,7 @@ export async function flushSave() {
 }
 interface AppState {
   workspace: Workspace; preferences: Preferences; ready: boolean;
+  persistedPdfTranslations: Workspace['pdfTranslations'];
   saveStatus: 'saved' | 'saving' | 'error'; history: Change[]; future: Change[];
   conflicts: ConflictDraft[];
   selectedNoteId?: string; focusNoteId?: string; focusHighlightId?: string;
@@ -77,7 +78,7 @@ interface AppState {
   undo: () => void; redo: () => void;
 }
 export const useApp = create<AppState>((set, get) => ({
-  workspace: emptyWorkspace(), preferences: readPreferences(), ready: false,
+  workspace: emptyWorkspace(), preferences: readPreferences(), ready: false, persistedPdfTranslations: [],
   saveStatus: 'saved', history: [], future: [], conflicts: [], sourceFocusSerial: 0, documentEpoch: 0, settingsOpen: false, helpOpen: false, exportOpen: false,
   edit(change, history = true) {
     const old = get().workspace;
@@ -125,7 +126,7 @@ function acceptShared(workspace: Workspace, incoming: SyncVersion) {
   for (const change of pending) if (change.epoch === version.epoch) next = applyPatches(next, change.patches, false) || next;
   const local = useApp.getState().workspace;
   next = { ...next, activeDocumentId: next.documents.some(d => d.id === local.activeDocumentId) ? local.activeDocumentId : undefined, viewport: local.viewport };
-  useApp.setState(s => ({ workspace: next, ...(reset ? { documentEpoch: s.documentEpoch + 1, history: [], future: [], focusHighlightId: undefined, focusScreenshotNoteId: undefined } : {}) }));
+  useApp.setState(s => ({ workspace: next, persistedPdfTranslations: workspace.pdfTranslations, ...(reset ? { documentEpoch: s.documentEpoch + 1, history: [], future: [], focusHighlightId: undefined, focusScreenshotNoteId: undefined } : {}) }));
   if (reset) window.dispatchEvent(new Event('paperreader-reset'));
   saveView(next);
 }
@@ -146,7 +147,7 @@ async function initializeOnce() {
     const view = readView(); const active = requestedDocument || view.activeDocumentId || state.workspace.activeDocumentId || state.workspace.documents[0]?.id;
     const workspace = { ...state.workspace, activeDocumentId: state.workspace.documents.some(d => d.id === active) ? active : undefined, viewport: freshBoardWindow() && requestedViewport || view.viewport || state.workspace.viewport };
     try { if (boardWindow) sessionStorage.setItem('PaperReader.boardInstance', windowId); } catch { /* Reading still works without saved views. */ }
-    useApp.setState({ workspace, conflicts: await db.drafts.toArray() }); saveView(workspace);
+    useApp.setState({ workspace, persistedPdfTranslations: workspace.pdfTranslations, conflicts: await db.drafts.toArray() }); saveView(workspace);
     saveReadingPreferences(useApp.getState().preferences);
     listenWindows(message => {
       if (message.type === 'changed') refreshInBackground();
@@ -159,10 +160,16 @@ async function initializeOnce() {
     });
     startWindows();
     window.addEventListener('focus', () => refreshInBackground());
+    window.addEventListener('paperreader-database-upgraded', () => {
+      window.dispatchEvent(new Event('paperreader-reset'));
+      useApp.setState({ saveStatus: 'error' });
+      toast('研究資料已由另一視窗升級。請重新整理此視窗後再編輯。', 'error');
+    });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshInBackground(); });
     window.addEventListener('pageshow', event => { if (event.persisted) void holdWindowStorage(false).then(() => refreshInBackground()).catch(() => toast('無法重新連接本機資料庫，請先備份研究資料。', 'error')); });
     // Recover only tasks whose owning window no longer holds the execution lock.
     if (!readerWindow) await recoverSummaryJobs();
+    if (state.workspace.pdfTranslationJobs.some(j => j.status === 'running')) await (await import('./lib/pdfTranslation')).recoverPdfTranslationJobs();
     await refreshShared();
   }
   catch { toast('無法開啟本機資料庫。請允許網站儲存空間，再重新整理。', 'error'); }
@@ -199,7 +206,7 @@ export async function replaceWorkspace(workspace: Workspace, documents: { id: st
     await db.workspaces.put(workspace);
     await db.sync.put({ id: 'default', epoch: uid(), revision: (saved?.revision || 0) + 1 });
   });
-  useApp.setState(s => ({ workspace, documentEpoch: s.documentEpoch + 1, history: [], future: [], selectedNoteId: undefined, focusNoteId: undefined, focusHighlightId: undefined, focusScreenshotNoteId: undefined }));
+  useApp.setState(s => ({ workspace, persistedPdfTranslations: workspace.pdfTranslations, documentEpoch: s.documentEpoch + 1, history: [], future: [], selectedNoteId: undefined, focusNoteId: undefined, focusHighlightId: undefined, focusScreenshotNoteId: undefined }));
   await refreshShared(); send({ type: 'changed' });
 }
 let toastTimer: ReturnType<typeof setTimeout>;
