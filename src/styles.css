@@ -173,7 +173,7 @@
 .pdf-translation-marker:hover,.pdf-translation-marker:focus-visible,.pdf-translation-marker[aria-expanded=true]{background:#e2edd7;color:#294c30;outline:1px solid #8aa477}
 .pdf-translation-layer.blocked .pdf-translation-marker{pointer-events:none;opacity:.4}
 .translation-source-outline{position:absolute;outline:1px solid #6d946a80;background:#8ab5820c;pointer-events:none}
-.translation-popover{position:fixed;z-index:35;box-sizing:border-box;width:max-content;max-width:min(320px,calc(100vw - 24px));max-height:min(240px,40vh);overflow:auto;overscroll-behavior:contain;padding:10px 12px;background:#fffef8;color:#374632;border:1px solid #d2ddc5;border-radius:7px;box-shadow:0 4px 18px #253d2226;font:14px/1.6 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;user-select:text;cursor:text}
+.translation-popover{position:fixed;z-index:35;box-sizing:border-box;width:max-content;max-width:min(320px,calc(100vw - 24px));max-height:min(240px,40vh);overflow:auto;overscroll-behavior:contain;padding:6px 10px;background:#fffef8;color:#374632;border:1px solid #d2ddc5;border-radius:7px;box-shadow:0 4px 18px #253d2226;font:14px/1.6 var(--sans);white-space:pre-wrap;overflow-wrap:anywhere;text-align:left;user-select:text;cursor:text}
 .translation-popover:focus-visible{outline:2px solid #8aa477;outline-offset:2px}
 .pdf-translation-dialog{padding:8px 24px 20px;color:#526349;font-size:13px;line-height:1.7}
 .pdf-translation-dialog>strong{display:block;overflow-wrap:anywhere}

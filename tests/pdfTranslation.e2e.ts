@@ -44,27 +44,22 @@ async function saved(page: Page): Promise<any> {
   });
 }
 function result(text: string) { return { status: 'completed', output: [{ content: [{ type: 'output_text', text }] }], usage: { total_tokens: 25 } }; }
-async function expectUnobscuredText(page: Page) {
+async function expectAttachedToParagraph(page: Page) {
   await expect.poll(() => page.evaluate(() => {
     const popup = document.querySelector('.translation-popover')?.getBoundingClientRect();
-    const root = document.querySelector('.pdf-scroll')?.getBoundingClientRect();
-    if (!popup || !root) return ['missing popup'];
-    return [...document.querySelectorAll('.pdf-scroll .textLayer span')].filter(span => {
-      const r = span.getBoundingClientRect();
-      const left = Math.max(r.left, root.left), right = Math.min(r.right, root.right);
-      const top = Math.max(r.top, root.top), bottom = Math.min(r.bottom, root.bottom);
-      return right > left && bottom > top && popup.left < right && popup.right > left && popup.top < bottom && popup.bottom > top;
-    }).map(span => span.textContent);
-  })).toEqual([]);
-  const popup = (await page.locator('.translation-popover').boundingBox())!;
-  const source = await page.locator('.translation-source-outline').evaluateAll(lines => {
-    const rects = lines.map(line => line.getBoundingClientRect());
-    return { top: Math.min(...rects.map(r => r.top)), bottom: Math.max(...rects.map(r => r.bottom)) };
-  });
-  expect(popup.y + popup.height <= source.top - 7 || popup.y >= source.bottom + 7).toBe(true);
+    const anchor = document.querySelector('.pdf-translation-marker[aria-expanded=true]')?.getBoundingClientRect();
+    const lines = [...document.querySelectorAll('.translation-source-outline')].map(line => line.getBoundingClientRect());
+    if (!popup || !anchor || !lines.length) return false;
+    const top = Math.min(anchor.top, ...lines.map(r => r.top));
+    const bottom = Math.max(anchor.bottom, ...lines.map(r => r.bottom));
+    const side = document.querySelector('.translation-popover')?.getAttribute('data-placement');
+    // The popup must touch the icon/source edge with an 8px gap, even when a
+    // larger blank region is available elsewhere on the page.
+    return side === 'above' ? Math.abs(top - popup.bottom - 8) < 1 : Math.abs(popup.top - bottom - 8) < 1;
+  })).toBe(true);
 }
 
-test('translation windows move above or below the whole paragraph without covering visible English', async ({ page }) => {
+test('translation windows stay immediately above their icon and keep the selected English clear', async ({ page }) => {
   let count = 0;
   await page.route('https://api.openai.com/v1/**', route => { count++; return route.fulfill({ json: result('不遮擋英文的中文譯文。') }); });
   await loadFixture(page); await configure(page);
@@ -74,9 +69,18 @@ test('translation windows move above or below the whole paragraph without coveri
   const marker = page.locator('.pdf-translation-marker').first();
   const popup = page.getByRole('region', { name: '中文譯文', exact: true });
   await marker.hover(); await expect(popup).toBeVisible(); await expect(popup).toHaveAttribute('data-placement', 'above');
-  await expectUnobscuredText(page);
+  await expectAttachedToParagraph(page);
   await popup.hover(); await expect(popup).toBeVisible();
   await page.screenshot({ path: 'test-results/pdf-translation-above.png' });
+  await page.keyboard.press('Escape');
+  // The second paragraph has text directly above it. It must stay attached
+  // to its own icon rather than jumping above the previous paragraph.
+  const secondMarker = page.locator('.pdf-page').first().locator('.pdf-translation-marker').nth(1);
+  await secondMarker.click(); await expect(popup).toBeVisible();
+  await expect(popup).toHaveAttribute('data-placement', 'above'); await expectAttachedToParagraph(page);
+  await popup.hover(); await expect(popup).toBeVisible();
+  await page.screenshot({ path: 'test-results/pdf-translation-nearby.png' });
+  await page.keyboard.press('Escape');
   await marker.click();
   // Keep the icon visible near the top: the translation must move down instead
   // of being clamped onto the English paragraph.
@@ -84,15 +88,15 @@ test('translation windows move above or below the whole paragraph without coveri
     const root = button.closest('.pdf-scroll')!;
     root.scrollTop += button.getBoundingClientRect().top - root.getBoundingClientRect().top - 8;
   });
-  await expect(popup).toHaveAttribute('data-placement', 'below'); await expectUnobscuredText(page);
+  await expect(popup).toHaveAttribute('data-placement', 'below'); await expectAttachedToParagraph(page);
   await page.screenshot({ path: 'test-results/pdf-translation-below.png' });
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: '旋轉 PDF', exact: true }).click();
   await expect(page.locator('.pdf-page').first()).toHaveAttribute('data-rotation', '90');
-  await marker.click(); await expect(popup).toBeVisible(); await expectUnobscuredText(page);
+  await marker.click(); await expect(popup).toBeVisible(); await expectAttachedToParagraph(page);
   await page.keyboard.press('Escape');
   await page.setViewportSize({ width: 1180, height: 820 });
-  await marker.click(); await expect(popup).toBeVisible(); await expectUnobscuredText(page);
+  await marker.click(); await expect(popup).toBeVisible(); await expectAttachedToParagraph(page);
   expect(count).toBe(8);
 });
 
@@ -401,9 +405,10 @@ test('long paragraphs expose one complete scrollable popup and resume saved subp
   await page.locator('.pdf-translation-marker').click();
   const popup = page.getByRole('region', { name: '中文譯文', exact: true });
   await expect(popup).toHaveText(longTranslation + '\n\n' + longTranslation);
-  const dimensions = await popup.evaluate(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, scroll: el.scrollHeight, client: el.clientHeight }));
+  const dimensions = await popup.evaluate(el => ({ w: el.getBoundingClientRect().width, h: el.getBoundingClientRect().height, top: el.getBoundingClientRect().top, scroll: el.scrollHeight, client: el.clientHeight }));
   expect(dimensions.w).toBeLessThanOrEqual(320); expect(dimensions.h).toBeLessThanOrEqual(240); expect(dimensions.scroll).toBeGreaterThan(dimensions.client);
-  await expectUnobscuredText(page);
+  expect(dimensions.top).toBeGreaterThanOrEqual((await page.locator('.pdf-scroll').boundingBox())!.y);
+  await expectAttachedToParagraph(page);
   await popup.evaluate(el => { el.scrollTop = el.scrollHeight; });
   await expect(popup).toBeVisible();
   await page.screenshot({ path: 'test-results/pdf-translation-long.png' });
@@ -420,7 +425,7 @@ test('touch popup stays in the mobile viewport, hiding icons preserves saved tra
   const marker = page.locator('.pdf-translation-marker').first(); await marker.tap();
   const popup = page.getByRole('region', { name: '中文譯文', exact: true }); await expect(popup).toBeVisible();
   const box = (await popup.boundingBox())!; expect(box.x).toBeGreaterThanOrEqual(12); expect(box.x + box.width).toBeLessThanOrEqual(378);
-  await expectUnobscuredText(page);
+  await expectAttachedToParagraph(page);
   const buttonBox = (await marker.boundingBox())!; expect(buttonBox.width).toBeGreaterThanOrEqual(44); expect(buttonBox.height).toBeGreaterThanOrEqual(44);
   await page.screenshot({ path: 'test-results/pdf-translation-touch.png' });
   await marker.tap(); await expect(popup).toHaveCount(0);

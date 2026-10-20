@@ -78,8 +78,8 @@ export function PdfTranslationMarkers({ documentId, pageIndex, width, height, ro
       const screen = { left: 12, top: 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12 };
       const readingArea = root && { left: Math.max(screen.left, root.left + 12), right: Math.min(screen.right, root.right - 12),
         top: Math.max(screen.top, root.top + 4), bottom: Math.min(screen.bottom, root.bottom - 4) };
-      const next = (readingArea && readingArea.right - readingArea.left >= size.width && placeTranslationPopover(source, size, readingArea, text))
-        || placeTranslationPopover(source, size, screen, text);
+      const next = (readingArea && readingArea.right - readingArea.left >= size.width && placeTranslationPopover(anchor, source, size, readingArea, text))
+        || placeTranslationPopover(anchor, source, size, screen, text);
       if (!next) { close(); return; }
       setPosition(prev => prev.x === next.x && prev.y === next.y && prev.maxHeight === next.maxHeight && prev.side === next.side ? prev : next);
     };
