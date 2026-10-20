@@ -6,7 +6,7 @@
 
 [開啟 PaperReader](https://educatres.github.io/PaperReader/) · [GitHub](https://github.com/educatres/PaperReader)
 
-[使用指引（PPTX，含範例操作截圖）](docs/PaperReader_使用指引.pptx) · [AI Agent 專案交接文件](交接文件.md)
+[使用指引（PPTX，含範例操作截圖）](docs/PaperReader_使用指引.pptx)
 
 繁體中文的私人研究工作台：**讀 PDF → 選字標記 → 來源便條 → 翻譯與摘要 → 知識白板 → 可攜備份**。
 
@@ -222,7 +222,7 @@ tests/            核心資料與瀏覽器驗收測試
 public/           本機範例 PDF、圖示與建置時複製的 PDF.js 資源
 ```
 
-原始規劃見 `PDF_AI_Research_Canvas_系統規格書_v1.0.md`。本版部署於 GitHub Pages，金鑰只暫存記憶體；所有供應商由前端以 HTTPS 直接連線。
+本版部署於 GitHub Pages，金鑰只暫存記憶體；所有供應商由前端以 HTTPS 直接連線。
 
 介接參考：[OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[OpenAI Models](https://developers.openai.com/api/reference/resources/models/methods/list)、[Gemini generateContent](https://ai.google.dev/api/generate-content)、[Gemini Models](https://ai.google.dev/api/models)。第三方授權見 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
 

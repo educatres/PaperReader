@@ -11,3 +11,9 @@ public/pdfjs/
 public/licenses/
 *.tsbuildinfo
 .guide-build/
+
+# Local planning and handoff documents
+/交接文件.md
+/PDF_AI_Research_Canvas_系統規格書_v1.0.md
+/PaperReader_PDF逐段翻譯與懸浮譯文_功能規格書_v1.0.md
+/PaperReader_多專案管理與切換_開發規格書_v1.0.md
