@@ -58,7 +58,10 @@ export function ProjectsPage() {
   const busy = working || importing;
   return <div className="projects-shell">
     <header className="projects-header"><div className="brand"><span className="brand-symbol"><BookOpen size={22} /></span><div><h1>PaperReader<span className="version-tag">BETA</span></h1><span className="brand-tagline">READ. THINK. CONNECT.</span></div></div>
-      <div className="projects-header-actions"><button className="secondary-button" onClick={() => useApp.setState({ settingsOpen: true })}><KeyRound size={16} />連接你的 AI</button><button className="icon-button" aria-label="使用指南" onClick={() => useApp.setState({ helpOpen: true })}><CircleHelp size={21} /></button></div></header>
+      <div className="projects-header-actions">
+        <a className="secondary-button" href={`${import.meta.env.BASE_URL}manual.html`} target="_blank" rel="noopener noreferrer" aria-label="操作手冊（另開分頁）"><BookOpen size={16} />操作手冊</a>
+        <button className="secondary-button" onClick={() => useApp.setState({ settingsOpen: true })}><KeyRound size={16} />連接你的 AI</button><button className="icon-button" aria-label="使用指南" onClick={() => useApp.setState({ helpOpen: true })}><CircleHelp size={21} /></button>
+      </div></header>
     <main className="projects-main"><div className="projects-heading"><div><span className="eyebrow">YOUR RESEARCH COLLECTION</span><h2>我的專案</h2><p>把不同研究分開整理，隨時接續閱讀。</p></div><button className="primary-button" disabled={busy || loading || !!error} onClick={() => open('create')}><Plus size={18} />建立專案</button></div>
       <div className="projects-controls"><label className="project-search"><Search size={18} /><input aria-label="搜尋專案名稱" placeholder="搜尋專案名稱…" value={query} onChange={e => setQuery(e.target.value)} />{query && <button className="icon-button" aria-label="清除搜尋" onClick={() => setQuery('')}><X size={15} /></button>}</label><select aria-label="專案排序" value={sort} onChange={e => setSort(e.target.value)}><option value="modified">最後修改</option><option value="name">專案名稱</option></select></div>
       {loading ? <div className="projects-empty" role="status"><LoaderCircle className="spin" size={30} /><p>正在讀取專案…</p></div>
