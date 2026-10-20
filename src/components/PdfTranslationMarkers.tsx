@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MessageSquareText } from 'lucide-react';
 import { deletePdfTranslation, useApp } from '../store';
 import { rotateRegion } from '../lib/screenshots';
+import { placeTranslationPopover } from '../lib/translationPopover';
 
 // Pages share a single popover within this window, including pinned state.
 let activePopover: { owner: string; pinned: boolean; close: () => void } | undefined;
@@ -22,7 +23,7 @@ export function PdfTranslationMarkers({ documentId, pageIndex, width, height, ro
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const suppress = useRef(0); const dragging = useRef(false);
   const returningFocus = useRef(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: 0, y: 0, maxHeight: 240, side: 'above' as 'above' | 'below' });
   const popupId = useId();
   const clearTimer = () => { clearTimeout(timer.current); };
   const close = () => { clearTimer(); if (activePopover?.owner === popupId) activePopover = undefined; openRef.current = undefined; setOpen(undefined); };
@@ -62,15 +63,33 @@ export function PdfTranslationMarkers({ documentId, pageIndex, width, height, ro
     const place = () => {
       const anchor = open.button.getBoundingClientRect(); const root = scrollRoot?.getBoundingClientRect();
       if (!open.button.isConnected || (root && (anchor.bottom < root.top || anchor.top > root.bottom || anchor.right < root.left || anchor.left > root.right))) { close(); return; }
-      const popup = popupRef.current?.getBoundingClientRect(); const w = popup?.width || 320; const h = popup?.height || 100;
-      const x = Math.max(12, Math.min(window.innerWidth - w - 12, anchor.right + 8 + w <= window.innerWidth - 12 ? anchor.right + 8 : anchor.left - w - 8));
-      const y = Math.max(12, Math.min(window.innerHeight - h - 12, anchor.top));
-      setPosition(prev => prev.x === x && prev.y === y ? prev : { x, y });
+      const layer = markersRef.current?.getBoundingClientRect(); const popup = popupRef.current;
+      if (!layer || !popup) return;
+      const lines = selected.paragraph.lines.map(line => {
+        const q = rotateRegion(line, rotation);
+        return { left: layer.left + q.x * width, right: layer.left + (q.x + q.width) * width,
+          top: layer.top + q.y * height, bottom: layer.top + (q.y + q.height) * height };
+      });
+      const source = { left: Math.min(...lines.map(l => l.left)), right: Math.max(...lines.map(l => l.right)),
+        top: Math.min(...lines.map(l => l.top)), bottom: Math.max(...lines.map(l => l.bottom)) };
+      const text = [...(scrollRoot?.querySelectorAll<HTMLElement>('.textLayer span') || [])]
+        .map(span => span.getBoundingClientRect()).filter(r => r.width && r.height && r.bottom > (root?.top || 0) && r.top < (root?.bottom || window.innerHeight));
+      const size = { width: popup.getBoundingClientRect().width, height: Math.min(240, window.innerHeight * .4, popup.scrollHeight + 2) };
+      const screen = { left: 12, top: 12, right: window.innerWidth - 12, bottom: window.innerHeight - 12 };
+      const readingArea = root && { left: Math.max(screen.left, root.left + 12), right: Math.min(screen.right, root.right - 12),
+        top: Math.max(screen.top, root.top + 4), bottom: Math.min(screen.bottom, root.bottom - 4) };
+      const next = (readingArea && readingArea.right - readingArea.left >= size.width && placeTranslationPopover(source, size, readingArea, text))
+        || placeTranslationPopover(source, size, screen, text);
+      if (!next) { close(); return; }
+      setPosition(prev => prev.x === next.x && prev.y === next.y && prev.maxHeight === next.maxHeight && prev.side === next.side ? prev : next);
     };
-    place(); const observer = new ResizeObserver(place); if (popupRef.current) observer.observe(popupRef.current);
-    scrollRoot?.addEventListener('scroll', place); window.addEventListener('resize', place);
-    return () => { observer.disconnect(); scrollRoot?.removeEventListener('scroll', place); window.removeEventListener('resize', place); };
-  }, [open, selected?.translation.text, scrollRoot]);
+    let frame = 0;
+    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(place); };
+    place(); const observer = new ResizeObserver(schedule); if (popupRef.current) observer.observe(popupRef.current); if (scrollRoot) observer.observe(scrollRoot);
+    const content = new MutationObserver(schedule); if (scrollRoot) content.observe(scrollRoot, { childList: true, subtree: true });
+    scrollRoot?.addEventListener('scroll', schedule); window.addEventListener('resize', schedule);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); content.disconnect(); scrollRoot?.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule); };
+  }, [open, selected?.translation.text, scrollRoot, width, height, rotation]);
   const placed: { x: number; y: number }[] = [];
   const hitSize = window.matchMedia('(pointer: coarse)').matches ? 44 : 24;
   const half = hitSize / 2;
@@ -102,7 +121,7 @@ export function PdfTranslationMarkers({ documentId, pageIndex, width, height, ro
       return <span className="translation-source-outline" key={i} style={{ left: q.x * width, top: q.y * height, width: q.width * width, height: q.height * height }} />;
     })}
     {selected && !blocked && !deleting && createPortal(<div ref={popupRef} id={popupId} className="translation-popover" role="region" aria-label="中文譯文" tabIndex={0}
-      style={{ left: position.x, top: position.y }} onPointerEnter={clearTimer} onPointerLeave={requestClose} onFocus={clearTimer} onBlur={requestClose}
+      data-placement={position.side} style={{ left: position.x, top: position.y, maxHeight: position.maxHeight }} onPointerEnter={clearTimer} onPointerLeave={requestClose} onFocus={clearTimer} onBlur={requestClose}
       onPointerDown={e => e.stopPropagation()}>{selected.translation.text}</div>, document.body)}
   </div>;
 }
