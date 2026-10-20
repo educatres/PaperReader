@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test } from '@playwright/test';
 
 test('old CGU settings use direct HTTPS for normalized key verification and generation', async ({ page }) => {
@@ -16,7 +17,7 @@ test('old CGU settings use direct HTTPS for normalized key verification and gene
       ? route.fulfill({ json: { data: [{ id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } })
       : route.fulfill({ json: { status: 'completed', output: [{ content: [{ type: 'output_text', text: 'OK' }] }] } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('瀏覽器直接連線至 CGU API');
@@ -58,7 +59,7 @@ test('CGU direct verification handles invalid keys, status errors and unavailabl
     requests.push(route.request().url());
     return route.fulfill({ status, json: status === 200 ? { data: [{ id: 'gpt-6-luna' }] } : { error: { message: 'private-provider-error' } } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
   await page.getByLabel('你的 API key').fill('invalid key with spaces');

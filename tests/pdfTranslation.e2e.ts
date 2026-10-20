@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -14,7 +15,7 @@ async function loadFixture(page: Page) {
       p.drawText('more evidence and limitations.', { x, y: 625, size: 11, font });
     }
   }
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('pdf-input').setInputFiles({ name: 'columns.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) });
   await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.busy-overlay')).toHaveCount(0);
@@ -38,7 +39,7 @@ async function saved(page: Page): Promise<any> {
     const request = indexedDB.open('PaperReader');
     const db: IDBDatabase = await new Promise(resolve => { request.onsuccess = () => resolve(request.result); });
     try {
-      const tx = db.transaction('workspacesV2'); const read = tx.objectStore('workspacesV2').get('default');
+      const tx = db.transaction('projectWorkspaces'); const read = tx.objectStore('projectWorkspaces').get(new URL(location.href).searchParams.get('project')!);
       return await new Promise(resolve => { read.onsuccess = () => resolve(read.result); });
     } finally { db.close(); }
   });
@@ -151,9 +152,11 @@ test('erase highlight preserves notes and source-page navigation through undo, r
   const pack = await readFile((await (await downloading).path())!);
   page.on('dialog', d => d.accept());
   await page.getByRole('button', { name: '文獻庫', exact: true }).click();
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
   await page.getByTestId('restore-input').setInputFiles({ name: 'erased.researchpack', mimeType: 'application/zip', buffer: pack });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(1);
   await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
   await expect(page.locator('.pdf-highlight')).toHaveCount(0);
@@ -194,9 +197,11 @@ test('erase translation removes saved parts, supports undo and backups, and only
   expect(data.pdfTranslations).toHaveLength(7); expect(data.pdfTranslationJobs[0].targets).toHaveLength(7);
   page.on('dialog', d => d.accept());
   await page.getByRole('button', { name: '文獻庫', exact: true }).click();
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.pdf-translation-marker')).toHaveCount(0);
   await page.getByTestId('restore-input').setInputFiles({ name: 'erased.researchpack', mimeType: 'application/zip', buffer: pack });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.pdf-translation-marker').first()).toBeVisible(); await expect(locator).toHaveCount(0);
   await configure(page);
   const next = await manager(page); await expect(next).toContainText('已保存 7 段');
@@ -295,8 +300,10 @@ test('translates page/column paragraphs, pure hover popup, keyboard, rotation an
   expect(JSON.stringify(packed)).not.toContain('sk-test');
   page.on('dialog', d => d.accept());
   await page.getByRole('button', { name: '文獻庫', exact: true }).click();
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await page.getByTestId('restore-input').setInputFiles({ name: 'translations.researchpack', mimeType: 'application/zip', buffer: bytes });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.pdf-translation-marker').first()).toBeVisible();
   expect((await saved(page)).pdfTranslations).toHaveLength(8);
   await page.reload(); await expect(page.locator('.pdf-translation-marker').first()).toBeVisible();
@@ -386,7 +393,7 @@ test('long paragraphs expose one complete scrollable popup and resume saved subp
   });
   const pdf = await PDFDocument.create(); const font = await pdf.embedFont(StandardFonts.Helvetica); const p = pdf.addPage([612, 792]);
   for (let i = 0; i < 140; i++) p.drawText('Evidence continues in this paragraph with data and limits', { x: 48, y: 740 - i * 5, font, size: 4 });
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('pdf-input').setInputFiles({ name: 'long.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) });
   await expect(page.locator('.textLayer span').first()).toBeVisible(); await configure(page);
   await page.getByRole('button', { name: '逐段翻譯', exact: true }).click();
@@ -442,7 +449,7 @@ test('storage failure stops subsequent generation and never exposes an uncommitt
   await page.evaluate(() => {
     const original = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function(value: any, key?: IDBValidKey) {
-      if (this.name === 'workspacesV2' && value.pdfTranslations?.length) throw new DOMException('Simulated quota', 'QuotaExceededError');
+      if (this.name === 'projectWorkspaces' && value.pdfTranslations?.length) throw new DOMException('Simulated quota', 'QuotaExceededError');
       return key === undefined ? original.call(this, value) : original.call(this, value, key);
     };
   });
@@ -458,7 +465,7 @@ test('deleting a source aborts pending output; undo restores its paragraph index
   await loadFixture(page); await configure(page);
   const dialog = await manager(page);
   await dialog.getByRole('button', { name: '開始逐段翻譯', exact: true }).click(); await expect.poll(() => count).toBe(1);
-  const other = await context.newPage(); await other.goto('./');
+  const other = await context.newPage(); await openProject(other);
   await other.getByRole('button', { name: '文獻庫', exact: true }).click(); other.once('dialog', d => d.accept());
   await other.getByRole('button', { name: '移除 columns.pdf', exact: true }).click();
   await expect.poll(async () => (await saved(other)).documents.length).toBe(0);

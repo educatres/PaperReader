@@ -3,9 +3,9 @@ import { now, type Workspace } from '../types';
 export const collections = ['documents', 'notes', 'highlights', 'edges', 'jobs', 'pdfLayouts', 'pdfParagraphs', 'pdfTranslations', 'pdfTranslationJobs'] as const;
 type Collection = typeof collections[number];
 export interface Patch { collection: Collection | 'workspace'; id?: string; field?: string; before?: unknown; after?: unknown }
-export interface Change { id: string; epoch: string; patches: Patch[] }
+export interface Change { id: string; projectId: string; epoch: string; patches: Patch[] }
 export interface ConflictDraft extends Change { createdAt: string; reason: string }
-export interface SyncVersion { id: string; epoch: string; revision: number; recent?: string[] }
+export interface SyncVersion { id: string; epoch: string; revision: number; recent?: string[]; state?: 'active' | 'deleted' }
 type RecordValue = Record<string, unknown>;
 export const equal = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 const comparable = (value: unknown) => value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'updatedAt')) : value;

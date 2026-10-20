@@ -9,16 +9,20 @@ import { Modal } from './Modal';
 import { GroupSummaryDialog } from './GroupSummaryDialog';
 import { useAI, cancelTask } from '../lib/ai';
 import { connectedGroup } from '../lib/groupSummary';
+import { registerEditor, getProjectId } from '../lib/projectContext';
 
 const nodeTypes = { researchNote: NoteNode };
 interface CanvasProps { onCollapse?: () => void; onPopout?: (viewport: Viewport) => void }
 function EdgeEditor({ edge, close }: { edge: Relation; close: () => void }) {
   const [base] = useState(edge);
   const [epoch] = useState(getWorkspaceEpoch);
+  const [projectId] = useState(getProjectId);
   const [draft, setDraft] = useState(edge);
   const latest = useRef(draft); latest.current = draft; const dismissed = useRef(false);
   function finish() { dismissed.current = true; close(); }
-  useEffect(() => () => { if (!dismissed.current && !useApp.getState().workspace.edges.some(e => e.id === base.id)) void preserveEntityDraft('edges', base, latest.current, epoch); }, [base, epoch]);
+  const autoSaved = useRef('');
+  useEffect(() => registerEditor(() => { saveEntityDraft('edges', base, latest.current, epoch, projectId); autoSaved.current = JSON.stringify(latest.current); }, () => ({ projectId, epoch, base, values: latest.current })), [base, epoch, projectId]);
+  useEffect(() => () => { if (!dismissed.current && JSON.stringify(latest.current) !== autoSaved.current && !useApp.getState().workspace.edges.some(e => e.id === base.id)) void preserveEntityDraft('edges', base, latest.current, epoch, projectId); }, [base, epoch, projectId]);
   function save() { saveEntityDraft('edges', base, draft, epoch); finish(); }
   return <Modal title="編輯便條關係" description="這是你建立的研究連結，可隨時調整。" onClose={finish}>
     <div className="editor-form"><label>關係類型<select value={draft.relationType} onChange={e => setDraft({ ...draft, relationType: e.target.value as Relation['relationType'] })}>{relations.map(r => <option key={r}>{r}</option>)}</select></label>

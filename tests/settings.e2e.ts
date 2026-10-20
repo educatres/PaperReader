@@ -1,8 +1,9 @@
+import { openProject } from './projectHelpers';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 test('top toolbar collapses, persists, and remains recoverable on narrow screens', async ({ page }) => {
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '先試讀一篇範例' }).click();
   await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
   const initial = await page.locator('.pdf-pane').boundingBox();
@@ -43,7 +44,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
       ? route.fulfill({ json: { data: [{ id: 'department/research-v2' }, { id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } })
       : route.fulfill({ json: { status: 'completed', output: [{ type: 'reasoning', content: [] }, { content: [{ type: 'output_text', text: 'CGU 測試翻譯。' }] }], usage: { total_tokens: 30 } } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await page.getByRole('button', { name: '編輯便條', exact: true }).click();
   await page.getByLabel('參考文字（選填）').fill('Research source for translation.');
@@ -94,7 +95,7 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   const persisted = await page.evaluate(async () => {
     const open = indexedDB.open('PaperReader');
     const db: IDBDatabase = await new Promise(resolve => { open.onsuccess = () => resolve(open.result); });
-    const read = db.transaction('workspacesV2').objectStore('workspacesV2').getAll();
+    const read = db.transaction('projectWorkspaces').objectStore('projectWorkspaces').getAll();
     const data = await new Promise(resolve => { read.onsuccess = () => resolve(read.result); });
     db.close();
     return JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, data });
@@ -117,7 +118,7 @@ test('older preferences retain custom models and adopt medium reasoning', async 
   await page.addInitScript(() => {
     localStorage.setItem('PaperReader.preferences', JSON.stringify({ provider: 'openai', models: { openai: 'my-existing-model', gemini: 'my-gemini' }, split: 60, lastPage: {} }));
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('my-existing-model');
   await expect(page.getByLabel('模型選項')).toHaveValue('custom');
@@ -141,7 +142,7 @@ test('stored keys display a fixed mask and clearing removes the active provider 
     auth.push(route.request().headers().authorization);
     return route.fulfill({ json: { data: [{ id: 'test-text-model' }] } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   const input = page.getByLabel('你的 API key');
@@ -208,7 +209,7 @@ test('Gemini selects the preferred text model across pages, otherwise requires a
     if (mode === 'missing') return route.fulfill({ json: { models: [textModel('gemini-other'), { name: 'models/gemini-flash-lite-latest', supportedGenerationMethods: ['embedContent'] }] } });
     return route.fulfill({ json: url.searchParams.has('pageToken') ? { models: [textModel('gemini-flash-lite-latest')] } : { models: [textModel('gemini-other')], nextPageToken: 'next-page' } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await page.getByLabel('你的 API key').fill('gemini-model-selection-test-secret');

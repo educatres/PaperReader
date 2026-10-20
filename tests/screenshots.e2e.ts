@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PDFDocument, degrees, rgb, StandardFonts } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import JSZip from 'jszip';
 
 test.use({ deviceScaleFactor: 2 });
 async function load(page: Page) {
-  page.on('dialog', d => d.accept()); await page.goto('./');
+  page.on('dialog', d => d.accept()); await openProject(page);
   const pdf = await PDFDocument.create(); const font = await pdf.embedFont(StandardFonts.Helvetica);
   for (let i = 0; i < 2; i++) {
     const p = pdf.addPage([400, 400]);
@@ -47,7 +48,8 @@ async function download(page: Page, kind: RegExp) {
   return readFile((await (await pending).path())!);
 }
 async function clear(page: Page) {
-  await page.getByRole('button', { name: '文獻庫', exact: true }).click(); await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '文獻庫', exact: true }).click(); await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
 }
 
@@ -143,9 +145,11 @@ test('images survive undo/redo, offline reload and full backup; missing/corrupt 
   await expect(page.getByRole('alert')).toContainText('匯入失敗'); await expect(card).toHaveCount(1);
   await clear(page);
   await page.getByTestId('restore-input').setInputFiles({ name: 'saved.researchpack', mimeType: 'application/zip', buffer: pack });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   expect(await rendered(card.locator('.screenshot-thumbnail img'))).toEqual(before); await expect(card.locator('.note-content')).toContainText('Manual transcription');
   await clear(page);
   await page.getByTestId('restore-input').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: json });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(card.locator('.screenshot-missing')).toContainText('缺少截圖圖片'); await expect(card.locator('.note-content')).toContainText('Manual transcription');
   await page.getByRole('button', { name: '匯出研究', exact: true }).click(); await page.getByRole('button', { name: /完整研究封裝/ }).click();
   await expect(page.locator('.export-error')).toContainText('缺少');

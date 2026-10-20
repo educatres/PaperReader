@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyWorkspace, now, type Note } from '../src/types';
@@ -17,7 +18,7 @@ test('Grok detects language models, generates note results, and retains settings
       ? route.fulfill({ json: { models: [textModel('grok-text-b'), textModel('grok-text-a'), { id: 'grok-image', input_modalities: ['text'], output_modalities: ['image'] }] } })
       : route.fulfill({ json: response() });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await page.getByRole('button', { name: '編輯便條', exact: true }).click();
   await page.getByLabel('參考文字（選填）').fill('Source text for Grok translation and summary.');
@@ -104,7 +105,7 @@ test('Grok preserves selections and prior results when model discovery or genera
     if (mode === 'unauthorized') return route.fulfill({ status: 401, json: { error: { message: 'private-error-with-secret' } } });
     return route.fulfill({ json: mode === 'invalid' ? { models: [{ id: 42 }] } : { models: mode === 'empty' ? [] : [textModel('grok-text')] } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await page.getByRole('button', { name: '編輯便條', exact: true }).click();
   await page.getByLabel('參考文字（選填）').fill('Evidence to preserve.');
@@ -157,7 +158,7 @@ test('Grok uses model-default reasoning in document and connected-note summaries
     generated.push(route.request().postDataJSON());
     return route.fulfill({ json: response('Grok 整合結果 [N1][N2]。') });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '先試讀一篇範例' }).click();
   await expect(page.locator('.pdf-page').first()).toBeVisible();
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
@@ -185,6 +186,7 @@ test('Grok uses model-default reasoning in document and connected-note summaries
   w.edges = [{ id: 'support', source: 'source-a', target: 'source-b', relationType: '支持', label: 'Related evidence', directed: true, createdBy: 'user', createdAt: now(), updatedAt: now() }];
   page.on('dialog', d => d.accept());
   await page.getByTestId('restore-input').setInputFiles({ name: 'grok-group.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(w)) });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(2);
   await page.locator('[data-note-id="source-a"] .note-title').click();
   await page.getByRole('button', { name: '關聯摘要', exact: true }).click();

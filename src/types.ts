@@ -95,13 +95,21 @@ export interface Preferences {
   provider: Provider; models: Record<Provider, string>; reasoningEffort: ReasoningEffort; toolbarCollapsed: boolean; pdfCollapsed: boolean; boardCollapsed: boolean;
   split: number; lastPage: Record<string, number>;
 }
+export interface ProjectMeta {
+  id: string; title: string; createdAt: string; updatedAt: string;
+  documentCount: number; noteCount: number; lastOpenedAt?: string;
+}
+export interface ProjectView {
+  projectId: string; kind: string; activeDocumentId?: string; viewport?: Viewport;
+  preferences?: Partial<Preferences>; pdf?: Record<string, unknown>;
+}
 export const colors: Record<Color, string> = {
   yellow: '#e6c75e', green: '#88bda0', pink: '#dfa2b6', blue: '#9ab9d9',
 };
 export const uid = () => crypto.randomUUID();
 export const now = () => new Date().toISOString();
-export const emptyWorkspace = (): Workspace => ({
-  schemaVersion: 2, id: 'default', title: '我的研究空間', documents: [], highlights: [], notes: [],
+export const emptyWorkspace = (id = 'default', title = '我的研究空間'): Workspace => ({
+  schemaVersion: 2, id, title, documents: [], highlights: [], notes: [],
   pdfLayouts: [], pdfParagraphs: [], pdfTranslations: [], pdfTranslationJobs: [],
   edges: [], jobs: [], viewport: { x: 35, y: 50, zoom: 0.85 }, updatedAt: now(),
 });

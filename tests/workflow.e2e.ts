@@ -1,9 +1,10 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import JSZip from 'jszip';
 
 async function loadSample(page: Page) {
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '先試讀一篇範例' }).click();
   await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();
   await expect(page.locator('.busy-overlay')).toHaveCount(0);
@@ -86,9 +87,11 @@ test('manual notes, editable relationships, undo/redo and portable backup restor
   await page.reload(); await expect(page.locator('.note-card')).toHaveCount(2); await expect(page.locator('.react-flow__edge')).toHaveCount(1);
   page.on('dialog', d => d.accept());
   await page.getByRole('button', { name: '文獻庫', exact: true }).click();
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
   await page.getByTestId('restore-input').setInputFiles({ name: 'restore.researchpack', mimeType: 'application/zip', buffer: await readFile((await download.path())!) });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(2); await expect(page.locator('.react-flow__edge')).toHaveCount(1);
   await expect.poll(() => page.locator('.pdf-highlight').count()).toBeGreaterThanOrEqual(3);
 });
@@ -121,7 +124,7 @@ test('API keys are session-only; OpenAI and Gemini requests keep output separate
   await page.locator('.note-tabs').getByRole('button', { name: '翻譯', exact: true }).click(); await expect(page.locator('.note-content')).toContainText('這是測試翻譯。');
   const persisted = await page.evaluate(async () => {
     const request = indexedDB.open('PaperReader'); const database: IDBDatabase = await new Promise(r => { request.onsuccess = () => r(request.result); });
-    const tx = database.transaction('workspacesV2'); const read = tx.objectStore('workspacesV2').getAll();
+    const tx = database.transaction('projectWorkspaces'); const read = tx.objectStore('projectWorkspaces').getAll();
     const data = await new Promise(r => { read.onsuccess = () => r(read.result); });
     return JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, data });
   });
@@ -142,9 +145,11 @@ test('JSON metadata restores notes, then reattaches the matching PDF without dup
   const json = await readFile((await downloaded.path())!);
   page.on('dialog', d => d.accept());
   await page.getByRole('button', { name: '文獻庫', exact: true }).click();
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
   await page.getByTestId('restore-input').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: json });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(1);
   await expect(page.locator('.empty-panel')).toContainText('找不到這篇 PDF');
   await page.getByTestId('pdf-input').setInputFiles({ name: 'Reading as a Research Practice.pdf', mimeType: 'application/pdf', buffer: await readFile('public/sample.pdf') });

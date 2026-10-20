@@ -1,9 +1,10 @@
 import JSZip from 'jszip';
 import { z } from 'zod';
-import { db } from './db';
+import { db, writeProject } from './db';
+import { requireProjectId, beginBusyOperation, saveOpenEditors } from './projectContext';
 import { sha256 } from './pdf';
-import { flushSave, useApp, toast, replaceWorkspace } from '../store';
-import { now, providers, reasoningEfforts, relations, type Workspace, type ImageAsset, type Screenshot } from '../types';
+import { flushSave, useApp, toast, replaceWorkspace, notifyProjectsChanged, localDraftSnapshot } from '../store';
+import { now, uid, providers, reasoningEfforts, relations, type Workspace, type ImageAsset, type Screenshot } from '../types';
 import { maxImageBytes, validateImageHeader } from './screenshots';
 import { textHash } from './pdfParagraphs';
 
@@ -124,11 +125,21 @@ function safeName(name: string) { return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, 
 function download(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
-export function exportJSON() {
+export async function exportJSON() {
+  const finish = beginBusyOperation();
+  try { await saveOpenEditors(); await exportJSONTask(); } finally { finish(); }
+}
+async function exportJSONTask() {
+  requireProjectId(); if (!await flushSave()) throw new Error('專案尚未保存，請先重試儲存或下載本視窗草稿。');
   const w = portableWorkspace();
   download(new Blob([JSON.stringify(w, null, 2)], { type: 'application/json' }), `${safeName(w.title)}.json`);
 }
-export function exportMarkdown() {
+export async function exportMarkdown() {
+  const finish = beginBusyOperation();
+  try { await saveOpenEditors(); await exportMarkdownTask(); } finally { finish(); }
+}
+async function exportMarkdownTask() {
+  requireProjectId(); if (!await flushSave()) throw new Error('專案尚未保存，請先重試儲存或下載本視窗草稿。');
   const w = useApp.getState().workspace;
   const lines = [`# ${w.title}`, '', `匯出時間：${new Date().toLocaleString('zh-TW')}`, ''];
   for (const n of w.notes) {
@@ -158,17 +169,25 @@ function portableWorkspace() {
   return w;
 }
 export async function exportPack() {
-  await flushSave(); const w = portableWorkspace(); const zip = new JSZip();
+  const finish = beginBusyOperation();
+  try { await saveOpenEditors(); await exportPackTask(); } finally { finish(); }
+}
+async function exportPackTask() {
+  const projectId = requireProjectId();
+  if (!await flushSave()) throw new Error('專案尚未保存，請先重試儲存或下載本視窗草稿。');
+  const w = portableWorkspace(); const zip = new JSZip();
   const images = [...new Map(w.notes.flatMap(n => n.screenshot ? [[n.screenshot.assetId, n.screenshot] as const] : [])).values()];
   if (w.documents.reduce((sum, d) => sum + d.size, 0) + images.reduce((sum, image) => sum + image.size, 0) + new Blob([JSON.stringify(w)]).size > 300 * 1024 * 1024) throw new Error('完整研究封裝超過 300 MB 上限，請先減少文獻或截圖。');
   zip.file('manifest.json', JSON.stringify({ schemaVersion: 2, app: 'PaperReader', workspace: w.title, exportedAt: now(), documents: w.documents.map(d => ({ id: d.id, name: d.name, sha256: d.sha256, file: `documents/${d.id}.pdf` })), images: images.map(image => ({ id: image.assetId, sha256: image.sha256, size: image.size, width: image.width, height: image.height, file: `images/${image.assetId}.png` })) }, null, 2));
   zip.file('annotations.json', JSON.stringify(w));
   for (const d of w.documents) {
-    const stored = await db.documents.get(d.id); if (!stored) throw new Error(`缺少 ${d.name} 的 PDF 檔案，請重新匯入 PDF 後再備份。`);
-    zip.file(`documents/${d.id}.pdf`, await stored.blob.arrayBuffer());
+    const stored = await db.documents.get([projectId, d.id]); if (!stored) throw new Error(`缺少 ${d.name} 的 PDF 檔案，請重新匯入 PDF 後再備份。`);
+    const buffer = await stored.blob.arrayBuffer();
+    if (buffer.byteLength !== d.size || await sha256(buffer) !== d.sha256) throw new Error(d.name + ' 的 PDF 校驗碼不符，請重新匯入原檔。');
+    zip.file(`documents/${d.id}.pdf`, buffer);
   }
   for (const image of images) {
-    const stored = await db.assets.get(image.assetId);
+    const stored = await db.assets.get([projectId, image.assetId]);
     if (!stored || stored.sha256 !== image.sha256) throw new Error('缺少截圖圖片，請匯入含圖片的完整研究封裝後再備份。');
     const buffer = await stored.blob.arrayBuffer(); validateImageHeader(buffer, image);
     if (await sha256(buffer) !== image.sha256) throw new Error('截圖校驗碼不符，請還原完整研究封裝。');
@@ -220,12 +239,20 @@ export async function readImport(file: File): Promise<ImportedPack> {
   }
   return { workspace, documents, assets };
 }
-export async function restoreImport(pack: ImportedPack) {
-  // Invalidate captures that were still encoding an image when restore began.
-  useApp.setState(s => ({ documentEpoch: s.documentEpoch + 1 }));
-  await flushSave();
-  const w = { ...pack.workspace, id: 'default', jobs: pack.workspace.jobs.map(j => ({ ...j, status: j.status === 'running' ? 'paused' as const : j.status })), updatedAt: now() };
+function pausedImport(pack: ImportedPack, id: string): Workspace {
+  const w = { ...structuredClone(pack.workspace), id, title: pack.workspace.title.trim().slice(0, 100) || '匯入的專案', jobs: pack.workspace.jobs.map(j => ({ ...j, status: j.status === 'running' ? 'paused' as const : j.status })), updatedAt: now() };
   w.pdfTranslationJobs.forEach(j => { if (j.status === 'running') j.status = 'paused'; j.targets.forEach(t => { if (t.status === 'running') t.status = 'pending'; }); });
+  return w;
+}
+export async function importAsProject(pack: ImportedPack) {
+  const id = uid(); await writeProject(pausedImport(pack, id), pack.documents, pack.assets);
+  notifyProjectsChanged(id); return id;
+}
+export async function restoreImport(pack: ImportedPack) {
+  const w = pausedImport(pack, requireProjectId());
   await replaceWorkspace(w, pack.documents, pack.assets);
   toast(pack.documents.length ? '研究空間已完整還原' : '筆記已匯入。JSON 不含 PDF 與截圖圖片，完整圖片請還原研究封裝。');
+}
+export function downloadLocalDraft(value: unknown = localDraftSnapshot()) {
+  download(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }), 'PaperReader_本視窗草稿.json');
 }

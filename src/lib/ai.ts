@@ -1,3 +1,4 @@
+import { captureContext, isCurrentContext, projectLock, taskKey, tasksStopping, registerCancellation, trackedTask } from './projectContext';
 import { create } from 'zustand';
 import { useApp, createNote, nextPosition, toast, refreshShared, flushSave, saveEntityDraft, getWorkspaceEpoch } from '../store';
 import { now, uid, usesReasoningEffort, type AIResult, type Chunk, type Provider, type ReasoningEffort, type SummaryJob } from '../types';
@@ -135,20 +136,23 @@ interface AIState {
 }
 export const useAI = create<AIState>(() => ({ running: {}, errors: {} }));
 const controllers = new Map<string, AbortController>();
+registerCancellation(() => { for (const controller of controllers.values()) controller.abort(); });
 window.addEventListener('paperreader-reset', () => { for (const controller of controllers.values()) controller.abort(); });
-export function cancelTask(id: string) { controllers.get(id)?.abort(); }
-export async function runGroupAI(plan: GroupSummaryPlan) {
-  if (useAI.getState().group) return;
+export function cancelTask(id: string) { controllers.get(taskKey(id))?.abort(); }
+export function runGroupAI(plan: GroupSummaryPlan) { return trackedTask(() => runGroupTask(plan)); }
+async function runGroupTask(plan: GroupSummaryPlan) {
+  const context = captureContext();
+  if (tasksStopping() || useAI.getState().group) return;
   const { provider, models, reasoningEffort } = useApp.getState().preferences;
   if (!hasKey(provider) || !models[provider]) { useApp.setState({ settingsOpen: true }); toast('請先設定你自己的 API key 與模型', 'error'); return; }
-  const taskId = uid(); const controller = new AbortController(); controllers.set(taskId, controller);
+  const taskId = uid(); const controller = new AbortController(); controllers.set(taskKey(taskId, context.projectId), controller);
   // Capture exactly what was shown in the confirmation, even if sources change during the request.
   const snapshot = structuredClone(plan);
   const epoch = useApp.getState().documentEpoch;
-  useAI.setState(s => ({ group: { taskId, sourceCount: snapshot.provenance.sources.length }, running: { ...s.running, [taskId]: '關聯摘要中' } }));
+  useAI.setState(s => ({ group: { taskId, sourceCount: snapshot.provenance.sources.length }, running: { ...s.running, [taskKey(taskId, context.projectId)]: '關聯摘要中' } }));
   try {
     const result = await generate(provider, models[provider], groupSummaryInstruction, snapshot.input, controller.signal, reasoningEffort);
-    if (controller.signal.aborted || epoch !== useApp.getState().documentEpoch) throw new Error('已取消關聯摘要。');
+    if (controller.signal.aborted || !isCurrentContext(context) || epoch !== useApp.getState().documentEpoch) throw new Error('已取消關聯摘要。');
     const notes = useApp.getState().workspace.notes;
     const sources = snapshot.provenance.sources.map(source => notes.find(n => n.id === source.noteId));
     if (sources.some(n => !n)) throw new Error('來源便條已移除，請重新選擇群組後再摘要。');
@@ -157,39 +161,45 @@ export async function runGroupAI(plan: GroupSummaryPlan) {
       groupSummary: snapshot.provenance, tags: ['關聯摘要'], color: 'blue', width: 380,
       position: nextPosition({ x: right, y: sources[0]!.position.y }) });
     toast(`已將 ${sources.length} 張關聯便條整合為紫色摘要便條`);
-  } catch (e) { toast((e as Error).message, 'error'); }
-  finally { controllers.delete(taskId); useAI.setState(s => { const running = { ...s.running }; delete running[taskId]; return { group: undefined, running }; }); }
+  } catch (e) { if (isCurrentContext(context)) toast((e as Error).message, 'error'); }
+  finally { const key = taskKey(taskId, context.projectId); if (controllers.get(key) === controller) controllers.delete(key); if (isCurrentContext(context)) useAI.setState(s => { const running = { ...s.running }; delete running[key]; return { group: undefined, running }; }); }
 }
-export async function runNoteAI(noteId: string, type: 'translation' | 'summary') {
+export function runNoteAI(noteId: string, type: 'translation' | 'summary') { return trackedTask(() => runNoteTask(noteId, type)); }
+async function runNoteTask(noteId: string, type: 'translation' | 'summary') {
+  const context = captureContext();
   const state = useApp.getState(); const note = state.workspace.notes.find(n => n.id === noteId);
   const epoch = getWorkspaceEpoch();
-  if (!note || useAI.getState().running[noteId]) return;
+  if (tasksStopping() || !note || useAI.getState().running[taskKey(noteId, context.projectId)]) return;
   const source = singleNoteText(note);
   if (!source.trim()) { toast('請先加入便條文字或研究筆記；圖片不會送交 AI 分析。', 'error'); return; }
   const { provider, models, reasoningEffort } = state.preferences;
   if (!hasKey(provider) || !models[provider]) { useApp.setState({ settingsOpen: true }); toast('請先設定你自己的 API key 與模型', 'error'); return; }
-  const controller = new AbortController(); controllers.set(noteId, controller);
-  useAI.setState(s => ({ running: { ...s.running, [noteId]: type === 'translation' ? '翻譯中' : '摘要中' }, errors: { ...s.errors, [noteId]: '' } }));
+  const controller = new AbortController(); controllers.set(taskKey(noteId, context.projectId), controller);
+  useAI.setState(s => ({ running: { ...s.running, [taskKey(noteId, context.projectId)]: type === 'translation' ? '翻譯中' : '摘要中' }, errors: { ...s.errors, [taskKey(noteId, context.projectId)]: '' } }));
   try {
     const result = await generate(provider, models[provider], type === 'translation'
       ? '忠實翻譯以下原文為自然繁體中文。保留引用編號、數字、專有名詞、縮寫與必要限制。只輸出翻譯。'
       : '以 1–3 句繁體中文摘要這段文字的核心論點、方法或發現與必要限制。資料不足時明言，不擴大推論。', source, controller.signal, reasoningEffort);
-    if (controller.signal.aborted || state.documentEpoch !== useApp.getState().documentEpoch || !useApp.getState().workspace.notes.some(n => n.id === noteId)) throw new Error('來源便條或研究空間已變更，未加入 AI 結果。');
+    if (controller.signal.aborted || !isCurrentContext(context) || state.documentEpoch !== useApp.getState().documentEpoch || !useApp.getState().workspace.notes.some(n => n.id === noteId)) throw new Error('來源便條或研究空間已變更，未加入 AI 結果。');
     saveEntityDraft('notes', note, { [type]: result }, epoch);
     toast(type === 'translation' ? '翻譯已完成' : '段落摘要已完成');
-  } catch (e) { useAI.setState(s => ({ errors: { ...s.errors, [noteId]: (e as Error).message } })); }
-  finally { controllers.delete(noteId); useAI.setState(s => { const running = { ...s.running }; delete running[noteId]; return { running }; }); }
+  } catch (e) { if (isCurrentContext(context)) useAI.setState(s => ({ errors: { ...s.errors, [taskKey(noteId, context.projectId)]: (e as Error).message } })); }
+  finally { const key = taskKey(noteId, context.projectId); if (controllers.get(key) === controller) controllers.delete(key); if (isCurrentContext(context)) useAI.setState(s => { const running = { ...s.running }; delete running[key]; return { running }; }); }
 }
 const finalInstruction = '以繁體中文整理這篇文獻。依序包含：文獻資訊（可辨識時）、研究背景、研究目的／假說、方法、資料與實驗設計、主要結果、限制、貢獻、可延伸研究。每個實質論點附原始來源頁碼範圍 [p. X–Y]；頁碼只能引用資料已提供的範圍。資訊不足請標示「未在擷取文字中確認」。最後加入「頁碼代表來源分塊範圍，並非經驗證的精準引用；請回查原文。圖表與公式可能未完整擷取。」';
-export async function runDocumentAI(documentId: string, resumeId?: string) {
+export function runDocumentAI(documentId: string, resumeId?: string) { return trackedTask(() => runDocumentLocked(documentId, resumeId)); }
+async function runDocumentLocked(documentId: string, resumeId?: string) {
+  const context = captureContext();
   if (!navigator.locks) { toast('此瀏覽器不支援多視窗任務保護，請使用新版 Edge、Chrome 或 Firefox。', 'error'); return; }
-  await navigator.locks.request('PaperReader.full-summary', { ifAvailable: true }, async lock => {
+  await navigator.locks.request(projectLock('full-summary'), { ifAvailable: true }, async lock => {
     if (!lock) { toast('另一個視窗正在執行全文摘要，請等候完成。', 'error'); return; }
     await refreshShared();
+    if (!isCurrentContext(context) || tasksStopping()) return;
     try { await runDocumentTask(documentId, resumeId); } finally { await flushSave(); }
   });
 }
 async function runDocumentTask(documentId: string, resumeId?: string) {
+  const context = captureContext();
   const epoch = useApp.getState().documentEpoch;
   if (useAI.getState().full) return;
   const { workspace, preferences } = useApp.getState();
@@ -206,13 +216,13 @@ async function runDocumentTask(documentId: string, resumeId?: string) {
   }
   const current: SummaryJob = structuredClone(job);
   const update = (patch: Partial<SummaryJob>) => {
-    if (epoch !== useApp.getState().documentEpoch) return;
+    if (!isCurrentContext(context) || epoch !== useApp.getState().documentEpoch) return;
     Object.assign(current, patch);
     useApp.getState().edit(w => { const j = w.jobs.find(j => j.id === current.id); if (j) Object.assign(j, patch); }, false);
   };
   update({ status: 'running', error: undefined, ...(usesReasoningEffort(provider) ? { reasoningEffort } : {}) });
-  const controller = new AbortController(); controllers.set(current.id, controller);
-  const progress = (phase: string) => useAI.setState({ full: { jobId: current.id, completed: current.results.filter(Boolean).length, total: current.chunks.length, phase } });
+  const controller = new AbortController(); controllers.set(taskKey(current.id, context.projectId), controller);
+  const progress = (phase: string) => { if (!isCurrentContext(context)) return; useAI.setState({ full: { jobId: current.id, completed: current.results.filter(Boolean).length, total: current.chunks.length, phase } }); };
   try {
     for (let i = 0; i < current.chunks.length; i++) {
       if (current.results[i]) continue;
@@ -220,7 +230,7 @@ async function runDocumentTask(documentId: string, resumeId?: string) {
       progress(`整理第 ${i + 1} / ${current.chunks.length} 個分塊`);
       const chunk = current.chunks[i];
       const result = await generate(provider, model, `整理此分塊的研究背景、方法、發現、限制與具體數據，不超過 900 字。只引用第 ${chunk.startPage}–${chunk.endPage} 頁，對每項重點附 [p. X–Y] 來源範圍。不得當成全文結論。`, chunk.text, controller.signal, reasoningEffort);
-      if (controller.signal.aborted || epoch !== useApp.getState().documentEpoch) throw new Error('研究空間已更換，已停止摘要。');
+      if (controller.signal.aborted || !isCurrentContext(context) || epoch !== useApp.getState().documentEpoch) throw new Error('研究空間已更換，已停止摘要。');
       current.results[i] = result; update({ results: [...current.results] }); progress('已保存分塊結果');
     }
     let summaries = current.results.map((r, i) => `[來源：p. ${current.chunks[i].startPage}–${current.chunks[i].endPage}]\n${r!.text}`);
@@ -228,6 +238,7 @@ async function runDocumentTask(documentId: string, resumeId?: string) {
       progress('分層整合長篇摘要');
       const reduced: string[] = [];
       for (let i = 0; i < summaries.length; i += 4) {
+        controller.signal.throwIfAborted(); if (!isCurrentContext(context)) throw new Error('專案已變更。');
         const result = await generate(provider, model, '整合這些局部摘要，保留所有重要研究事實、限制與各自原始頁碼。不超過 1200 字，不添加來源外結論。', summaries.slice(i, i + 4).join('\n\n'), controller.signal, reasoningEffort);
         reduced.push(result.text);
       }
@@ -236,13 +247,15 @@ async function runDocumentTask(documentId: string, resumeId?: string) {
     }
     progress('撰寫文獻總覽');
     const result = await generate(provider, model, finalInstruction, summaries.join('\n\n'), controller.signal, reasoningEffort);
-    if (controller.signal.aborted || epoch !== useApp.getState().documentEpoch || !useApp.getState().workspace.documents.some(d => d.id === documentId) || !useApp.getState().workspace.jobs.some(j => j.id === current.id)) throw new Error('來源文件或任務已移除，停止加入摘要。');
+    if (controller.signal.aborted || !isCurrentContext(context) || epoch !== useApp.getState().documentEpoch || !useApp.getState().workspace.documents.some(d => d.id === documentId) || !useApp.getState().workspace.jobs.some(j => j.id === current.id)) throw new Error('來源文件或任務已移除，停止加入摘要。');
     const note = createNote({ type: 'document-summary', documentId, title: `${paper.name.replace(/\.pdf$/i, '')} · 全文總覽`,
       originalText: `全文文字摘要 · p. 1–${paper.pageCount}\n來源頁碼為分塊範圍，請回查原文；圖表與公式可能未完整擷取。`,
       summary: result, color: 'green', tags: ['全文總覽'] });
     update({ status: 'complete', resultNoteId: note.id }); toast('全文總覽已加入研究白板');
   } catch (e) {
     update({ status: controller.signal.aborted ? 'paused' : 'failed', error: (e as Error).message });
-    toast((e as Error).message, 'error');
-  } finally { controllers.delete(current.id); useAI.setState({ full: undefined }); }
+    if (isCurrentContext(context)) toast((e as Error).message, 'error');
+  } finally { const key = taskKey(current.id, context.projectId); if (controllers.get(key) === controller) controllers.delete(key); if (isCurrentContext(context)) useAI.setState({ full: undefined }); }
 }
+
+window.addEventListener('paperreader-reset', () => useAI.setState({ running: {}, errors: {}, full: undefined, group: undefined }));

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type SetStat
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
 import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan, ExternalLink, PanelLeftClose, Eraser } from 'lucide-react';
 import 'pdfjs-dist/web/pdf_viewer.css';
-import { useApp, addHighlight, deletePdfHighlight, toast } from '../store';
+import { useApp, addHighlight, deletePdfHighlight, toast, savePdfPreference } from '../store';
+import { projectStorageKey, registerEditor } from '../lib/projectContext';
 import { openPaper, sha256 } from '../lib/pdf';
 import { rangeQuads, resolveAnchor, selectionOffsets, normalizeText } from '../lib/anchors';
 import { colors, uid, now, type Color, type Highlight, type Screenshot } from '../types';
@@ -17,11 +18,11 @@ import { usePdfTranslation } from '../lib/pdfTranslation';
 function useDocumentSetting<T extends string | number>(documentId: string, name: string, fallback: T, valid: (value: unknown) => boolean): [T, (action: SetStateAction<T>) => void] {
   const [cache, setCache] = useState<Record<string, T>>({});
   let value = cache[documentId] ?? fallback;
-  if (!(documentId in cache)) { try { const saved = JSON.parse(sessionStorage.getItem(`PaperReader.pdf.${documentId}.${name}`) || 'null'); if (valid(saved)) value = saved as T; } catch { /* Use the default view. */ } }
+  if (!(documentId in cache)) { try { const saved = JSON.parse(sessionStorage.getItem(projectStorageKey(`pdf.${documentId}.${name}`)) || 'null'); if (valid(saved)) value = saved as T; } catch { /* Use the default view. */ } }
   return [value, action => {
     const next = typeof action === 'function' ? action(value) : action;
     setCache(current => ({ ...current, [documentId]: next }));
-    try { sessionStorage.setItem(`PaperReader.pdf.${documentId}.${name}`, JSON.stringify(next)); } catch { /* The view still works in memory. */ }
+    try { sessionStorage.setItem(projectStorageKey(`pdf.${documentId}.${name}`), JSON.stringify(next)); savePdfPreference(); } catch { /* The view still works in memory. */ }
   }];
 }
 
@@ -121,6 +122,12 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   const [zoom, setZoom] = useDocumentSetting<number>(paper?.id || '', 'zoom', 1, value => typeof value === 'number' && value >= .5 && value <= 2.5);
   const [rotation, setRotation] = useDocumentSetting<number>(paper?.id || '', 'rotation', 0, value => typeof value === 'number' && [0, 90, 180, 270].includes(value));
   const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(preferences.lastPage[paper?.id || ''] || 1); const [pageInput, setPageInput] = useState(String(page));
+  const readingPosition = useRef({ documentId: paper?.id, page, loaded: !!pdf }); readingPosition.current = { documentId: paper?.id, page, loaded: !!pdf };
+  useEffect(() => registerEditor(() => {
+    const current = readingPosition.current; if (!current.documentId || !current.loaded) return;
+    const p = useApp.getState().preferences;
+    useApp.getState().pref({ lastPage: { ...p.lastPage, [current.documentId]: current.page } });
+  }, () => readingPosition.current), []);
   const [searchOpen, setSearchOpen] = useState(false); const [query, setQuery] = useState(''); const [hit, setHit] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null); const [root, setRoot] = useState<HTMLDivElement | null>(null);
   const attachRoot = useCallback((element: HTMLDivElement | null) => { scrollRef.current = element; setRoot(element); }, []);

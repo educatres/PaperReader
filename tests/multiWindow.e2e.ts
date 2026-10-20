@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 
@@ -34,11 +35,11 @@ async function mark(page: Page, n: number, line = 0) {
 async function snapshot(page: Page): Promise<any> {
   return page.evaluate(() => new Promise((resolve, reject) => {
     const opening = indexedDB.open('PaperReader'); opening.onerror = () => reject(opening.error);
-    opening.onsuccess = () => { const database = opening.result; const request = database.transaction('workspacesV2').objectStore('workspacesV2').get('default'); request.onsuccess = () => { database.close(); resolve(request.result); }; request.onerror = () => reject(request.error); };
+    opening.onsuccess = () => { const database = opening.result; const request = database.transaction('projectWorkspaces').objectStore('projectWorkspaces').get(new URL(location.href).searchParams.get('project')!); request.onsuccess = () => { database.close(); resolve(request.result); }; request.onerror = () => reject(request.error); };
   }));
 }
 async function boardView(page: Page) {
-  return page.evaluate(() => JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}').viewport as { x: number; y: number; zoom: number });
+  return page.evaluate(() => JSON.parse(sessionStorage.getItem(`PaperReader.project.${new URL(location.href).searchParams.get('project')}.view.${new URL(location.href).searchParams.get('view') || 'main'}`) || '{}').viewport as { x: number; y: number; zoom: number });
 }
 async function panBoard(page: Page, dx = -180, dy = -100) {
   const previous = await boardView(page); const bounds = (await page.locator('.react-flow__pane').boundingBox())!;
@@ -54,10 +55,10 @@ async function openBoard(page: Page, context: BrowserContext) {
 }
 
 test('PDF collapse restores this window’s page, zoom and hand mode across reload; popup blocking has a tab fallback', async ({ page }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   await page.getByRole('button', { name: '放大 PDF', exact: true }).click(); await go(page, 2);
   await page.getByRole('button', { name: '手掌模式', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem('PaperReader.readingPreferences') || '{}').lastPage?.[JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}').activeDocumentId])).toBe(2);
+  await expect.poll(() => page.evaluate(() => JSON.parse(sessionStorage.getItem(`PaperReader.project.${new URL(location.href).searchParams.get('project')}.readingPreferences.${new URL(location.href).searchParams.get('view') || 'main'}`) || '{}').lastPage?.[JSON.parse(sessionStorage.getItem(`PaperReader.project.${new URL(location.href).searchParams.get('project')}.view.${new URL(location.href).searchParams.get('view') || 'main'}`) || '{}').activeDocumentId])).toBe(2);
   await page.getByRole('button', { name: '隱藏 PDF 面板', exact: true }).click();
   await expect(page.locator('.pdf-pane, .split-handle')).toHaveCount(0);
   const board = (await page.locator('.board-pane').boundingBox())!; expect(board.width).toBe(1440);
@@ -77,7 +78,7 @@ test('PDF collapse restores this window’s page, zoom and hand mode across relo
 });
 
 test('multiple independent PDF windows share simultaneous marks, local undo, source routing and survive closing the main window', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   const one = await openReader(page, context);
   await expect(page.getByRole('button', { name: '顯示 PDF', exact: true })).toBeVisible();
   const two = await openReader(one, context);
@@ -106,7 +107,7 @@ test('multiple independent PDF windows share simultaneous marks, local undo, sou
   await expect(one.getByLabel('頁碼', { exact: true })).toHaveValue('1');
   await expect(page.locator('.pdf-pane')).toHaveCount(0);
   await go(two, 3);
-  await expect.poll(() => two.evaluate(() => JSON.parse(sessionStorage.getItem('PaperReader.readingPreferences') || '{}').lastPage?.[JSON.parse(sessionStorage.getItem('PaperReader.view') || '{}').activeDocumentId])).toBe(3);
+  await expect.poll(() => two.evaluate(() => JSON.parse(sessionStorage.getItem(`PaperReader.project.${new URL(location.href).searchParams.get('project')}.readingPreferences.${new URL(location.href).searchParams.get('view') || 'main'}`) || '{}').lastPage?.[JSON.parse(sessionStorage.getItem(`PaperReader.project.${new URL(location.href).searchParams.get('project')}.view.${new URL(location.href).searchParams.get('view') || 'main'}`) || '{}').activeDocumentId])).toBe(3);
   await two.reload(); await ready(two); await expect(two.getByLabel('頁碼', { exact: true })).toHaveValue('3');
   await page.close(); await mark(two, 3, 2);
   await expect.poll(async () => (await snapshot(two)).notes.length).toBe(3);
@@ -117,7 +118,7 @@ test('multiple independent PDF windows share simultaneous marks, local undo, sou
 });
 
 test('a running summary keeps its owner across new windows; duplicate execution is blocked and a closed owner can be resumed', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   async function configure(target: Page) {
     await target.getByRole('button', { name: '連接你的 AI', exact: true }).click();
     await target.getByLabel('你的 API key').fill('sk-mocked-window-only');
@@ -137,7 +138,7 @@ test('a running summary keeps its owner across new windows; duplicate execution 
   await expect.poll(() => calls).toBe(1);
   await expect.poll(async () => (await snapshot(page)).jobs[0]?.status).toBe('running');
   const reader = await openReader(page, context);
-  const other = await context.newPage(); await other.goto('./');
+  const other = await context.newPage(); await openProject(other);
   await expect(other.getByRole('button', { name: '連接你的 AI', exact: true })).toBeVisible();
   expect((await snapshot(other)).jobs[0].status).toBe('running');
   await configure(other);
@@ -155,7 +156,7 @@ test('a running summary keeps its owner across new windows; duplicate execution 
 });
 
 test('screenshot assets remain available for another window to undo, and reader windows reload offline', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   const reader = await openReader(page, context);
   await reader.getByRole('button', { name: '截圖模式', exact: true }).click();
@@ -170,7 +171,7 @@ test('screenshot assets remain available for another window to undo, and reader 
   await page.getByRole('button', { name: '刪除便條與標記', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
   await expect(page.locator('.save-status')).toContainText('已存於本機');
-  const another = await context.newPage(); await another.goto('./');
+  const another = await context.newPage(); await openProject(another);
   await expect(another.locator('.app-loading')).toHaveCount(0);
   await page.getByRole('button', { name: '復原', exact: true }).click();
   await expect(another.locator('.screenshot-thumbnail img')).toBeVisible();
@@ -186,7 +187,7 @@ test('screenshot assets remain available for another window to undo, and reader 
 });
 
 test('different PDFs can be opened from the library and changes do not switch the other window’s document', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page, 'Window A'); await ready(page);
+  await openProject(page); await loadPaper(page, 'Window A'); await ready(page);
   const one = await openReader(page, context);
   await page.getByRole('button', { name: '顯示 PDF', exact: true }).click();
   await loadPaper(page, 'Window B');
@@ -202,21 +203,30 @@ test('different PDFs can be opened from the library and changes do not switch th
 });
 
 test('stale editor fields merge independently; same-field conflicts persist across reload and allow choosing a version', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await page.getByRole('button', { name: '新增便條', exact: true }).click();
+  await openProject(page); await loadPaper(page); await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).notes.length).toBe(1);
-  const other = await context.newPage(); await other.goto('./'); await expect(other.locator('.note-card')).toHaveCount(1);
-  for (const target of [page, other]) await target.getByRole('button', { name: '編輯便條', exact: true }).click();
+  const other = await context.newPage(); await openProject(other); await expect(other.locator('.note-card')).toHaveCount(1);
+  for (const target of [page, other]) { await target.bringToFront(); await target.getByRole('button', { name: '編輯便條', exact: true }).click(); }
+  await page.bringToFront();
   await page.getByLabel('便條標題').fill('Shared title');
+  await other.bringToFront();
   await other.getByRole('textbox', { name: '我的筆記', exact: true }).fill('Independent field');
+  await page.bringToFront();
   await page.getByRole('button', { name: '儲存便條', exact: true }).click();
+  await expect(page.locator('.save-status')).toContainText('已存於本機');
+  await other.bringToFront();
   await other.getByRole('button', { name: '儲存便條', exact: true }).click();
-  await expect.poll(async () => (await snapshot(page)).notes[0]).toMatchObject({ title: 'Shared title', userNotes: 'Independent field' });
+  await expect.poll(async () => (await snapshot(other)).notes[0]).toMatchObject({ title: 'Shared title', userNotes: 'Independent field' });
   await expect(page.locator('.sync-conflict-notice')).toHaveCount(0);
-  for (const target of [page, other]) await target.getByRole('button', { name: '編輯便條', exact: true }).click();
+  for (const target of [page, other]) { await target.bringToFront(); await target.getByRole('button', { name: '編輯便條', exact: true }).click(); }
+  await page.bringToFront();
   await page.getByRole('textbox', { name: '我的筆記', exact: true }).fill('Version A');
+  await other.bringToFront();
   await other.getByRole('textbox', { name: '我的筆記', exact: true }).fill('Version B');
+  await page.bringToFront();
   await page.getByRole('button', { name: '儲存便條', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).notes[0].userNotes).toBe('Version A');
+  await other.bringToFront();
   await other.getByRole('button', { name: '儲存便條', exact: true }).click();
   await expect(other.locator('.sync-conflict-notice')).toBeVisible();
   await other.reload(); await other.locator('.sync-conflict-notice').click();
@@ -225,29 +235,34 @@ test('stale editor fields merge independently; same-field conflicts persist acro
   await expect(conflict.getByLabel('這份草稿')).toHaveValue('Version B');
   await conflict.getByRole('button', { name: '套用草稿版本', exact: true }).click();
   await expect(other.locator('.sync-conflict-notice')).toHaveCount(0);
-  await expect.poll(async () => (await snapshot(page)).notes[0].userNotes).toBe('Version B');
+  await expect.poll(async () => (await snapshot(other)).notes[0].userNotes).toBe('Version B');
   // A stale editor must never recreate a note after another window clears the workspace.
   await other.getByRole('button', { name: '編輯便條', exact: true }).click(); await other.getByRole('textbox', { name: '我的筆記', exact: true }).fill('Old workspace draft');
+  await page.bringToFront();
   await page.getByRole('button', { name: '文獻庫', exact: true }).click(); page.once('dialog', dialog => dialog.accept());
-  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await page.getByRole('button', { name: '清空目前專案', exact: true }).click();
+  await page.getByRole('button', { name: '確認清空', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(0);
   await expect(other.locator('.sync-conflict-notice')).toBeVisible();
   expect((await snapshot(page)).notes).toHaveLength(0);
 });
 
 test('an editor opened before restore cannot overwrite the restored note even when its ID is unchanged', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page);
+  await openProject(page); await loadPaper(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).notes.length).toBe(1);
   const backup = await snapshot(page); backup.notes[0].userNotes = 'Restored workspace';
-  const other = await context.newPage(); await other.goto('./');
+  const other = await context.newPage(); await openProject(other);
   await other.getByRole('button', { name: '編輯便條', exact: true }).click();
   await other.getByRole('textbox', { name: '我的筆記', exact: true }).fill('Old unsaved draft');
+  await page.bringToFront();
   page.once('dialog', dialog => dialog.accept());
   await page.getByTestId('restore-input').setInputFiles({ name: 'restored.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).notes[0].userNotes).toBe('Restored workspace');
   await expect(other.locator('.note-card')).toHaveCount(1);
   await expect(other.locator('.notes-preview')).toHaveText('Restored workspace');
+  await other.bringToFront();
   await other.getByRole('button', { name: '儲存便條', exact: true }).click();
   await expect(other.locator('.sync-conflict-notice')).toBeVisible();
   expect((await snapshot(other)).notes[0].userNotes).toBe('Restored workspace');
@@ -258,7 +273,7 @@ test('an editor opened before restore cannot overwrite the restored note even wh
 });
 
 test('either panel can fill the window, hidden whiteboard views survive reload, and mobile actions remain reachable', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   const divider = page.getByRole('separator', { name: '調整閱讀器與白板寬度' });
   for (let i = 0; i < 11; i++) await divider.press('ArrowRight');
   const narrowBoard = (await page.locator('.board-pane').boundingBox())!;
@@ -295,7 +310,7 @@ test('either panel can fill the window, hidden whiteboard views survive reload, 
 });
 
 test('multiple board windows inherit the current view then retain independent positions through edits, hiding and reload', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page);
+  await openProject(page); await loadPaper(page); await ready(page);
   await page.getByRole('button', { name: '隱藏 PDF 面板', exact: true }).click();
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(1); await page.waitForTimeout(550);
@@ -309,6 +324,7 @@ test('multiple board windows inherit the current view then retain independent po
   expect(await boardView(one)).toEqual(first); expect(await boardView(page)).toEqual(original);
   await page.getByRole('button', { name: '白板全貌', exact: true }).click(); await page.waitForTimeout(450);
   await page.getByRole('button', { name: '編輯便條', exact: true }).click(); await page.getByLabel('便條標題').fill('Shared board edit');
+  await page.bringToFront();
   await page.getByRole('button', { name: '儲存便條', exact: true }).click();
   for (const target of [one, two]) await expect(target.locator('.note-title')).toHaveText('Shared board edit');
   expect(await boardView(one)).toEqual(first); expect(await boardView(two)).toEqual(second);
@@ -324,7 +340,7 @@ test('multiple board windows inherit the current view then retain independent po
 });
 
 test('a PDF highlight focuses only the most recently used visible board and source navigation returns to its reader', async ({ page, context }) => {
-  await page.goto('./'); await loadPaper(page); await ready(page); await mark(page, 1);
+  await openProject(page); await loadPaper(page); await ready(page); await mark(page, 1);
   await expect(page.locator('.note-card')).toHaveCount(1); await page.waitForTimeout(550);
   const reader = await openReader(page, context);
   const one = await openBoard(page, context); await panBoard(one, -340, -120);

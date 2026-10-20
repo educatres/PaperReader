@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { readFile } from 'node:fs/promises';
@@ -14,7 +15,7 @@ test('whole-document summary resumes cached chunks after failure and preserves t
   const sourcePdf = await PDFDocument.load(await readFile('public/sample.pdf'));
   const longerPdf = await PDFDocument.create();
   for (let i = 0; i < 3; i++) for (const p of await longerPdf.copyPages(sourcePdf, sourcePdf.getPageIndices())) longerPdf.addPage(p);
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('pdf-input').setInputFiles({ name: 'long-paper.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await longerPdf.save()) });
   await expect(page.locator('.busy-overlay')).toHaveCount(0);
   await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
@@ -46,7 +47,7 @@ test('whole-document summary resumes cached chunks after failure and preserves t
   await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();
 });
 test('offline reload retains local papers and notes with the installed service worker', async ({ page, context }) => {
-  await page.goto('./');
+  await openProject(page);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.getByRole('button', { name: '先試讀一篇範例' }).click();
   await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();
@@ -61,7 +62,7 @@ test('offline reload retains local papers and notes with the installed service w
 test('20-page double-column PDF renders lazily, supports page navigation, and scanned pages stay readable', async ({ page }) => {
   const pdf = await PDFDocument.create(); const font = await pdf.embedFont(StandardFonts.Helvetica);
   for (let i = 1; i <= 20; i++) { const p = pdf.addPage([612, 792]); for (const x of [48, 320]) { p.drawText(`Research page ${i}`, { x, y: 730, font, size: 16 }); for (let line = 0; line < 25; line++) p.drawText(`Column evidence ${i}, line ${line + 1}.`, { x, y: 690 - line * 20, font, size: 11 }); } }
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('pdf-input').setInputFiles({ name: 'twenty-pages.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) });
   await expect(page.locator('.pdf-page')).toHaveCount(20);
   await expect(page.locator('.pdf-page[data-page-index="0"] .textLayer span').first()).toBeVisible();

@@ -112,13 +112,13 @@ it('upgrades a real v3 IndexedDB record and isolates new research from old-clien
   const legacy = new Dexie('PaperReader'); legacy.version(3).stores({ workspaces: 'id', documents: 'id', assets: 'id', sync: 'id', drafts: 'id' });
   await legacy.table('workspaces').put({ ...legacyFields, schemaVersion: 1 });
   await legacy.table('documents').put({ id: 'pdf', blob: new Blob(['legacy']) }); legacy.close();
-  await db.open(); const migrated = (await loadWorkspace())!;
+  await db.open(); const migrated = (await loadWorkspace('default'))!;
   expect(migrated.documents).toEqual(w.documents); expect(migrated.schemaVersion).toBe(2); expect(migrated.pdfTranslationJobs).toEqual([]);
-  expect((await db.documents.get('pdf'))!.blob.size).toBe(6);
+  expect((await db.documents.get(['default', 'pdf']))!.blob.size).toBe(6);
   await legacy.open();
   await legacy.table('workspaces').put({ ...legacyFields, schemaVersion: 1, title: 'Old client overwrite' });
   legacy.close();
   await db.open();
-  expect((await loadWorkspace())!.title).toBe(w.title);
+  expect((await loadWorkspace('default'))!.title).toBe(w.title);
   await db.delete();
 });

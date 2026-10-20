@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -10,7 +11,7 @@ test('mercuryapi detects models on key save, tests the selected model, translate
       ? route.fulfill({ json: { data: [{ id: 'research/reading-v2' }, { id: 'gpt-text' }] } })
       : route.fulfill({ json: { status: 'completed', output: [{ content: [{ type: 'output_text', text: 'Mercury 翻譯結果。' }] }], usage: { total_tokens: 18 } } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '新增便條', exact: true }).click();
   await page.getByRole('button', { name: '編輯便條', exact: true }).click();
   await page.getByLabel('參考文字（選填）').fill('Source text for the Mercury provider.');
@@ -86,7 +87,7 @@ test('mercuryapi handles unavailable model lists and manual IDs without losing c
     if (mode === 'unauthorized') return route.fulfill({ status: 401, json: { error: { message: 'private-provider-error-with-secret' } } });
     return route.fulfill({ json: mode === 'invalid' ? { data: [{ id: 42 }] } : { data: mode === 'empty' ? [] : [{ id: 'available-text' }] } });
   });
-  await page.goto('./');
+  await openProject(page);
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
   await page.getByRole('button', { name: 'mercuryapi', exact: true }).click();
   await page.getByLabel('你的 API key').fill('sk-mercury-error-test-secret');

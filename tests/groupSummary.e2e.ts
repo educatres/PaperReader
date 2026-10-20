@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyWorkspace, now, type Note, type Relation } from '../src/types';
@@ -19,8 +20,9 @@ function fixture() {
 }
 async function load(page: Page) {
   page.on('dialog', d => d.accept());
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('restore-input').setInputFiles({ name: 'connected-notes.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(fixture())) });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(page.locator('.note-card')).toHaveCount(4);
 }
 async function configure(page: Page) {
@@ -78,6 +80,7 @@ test('connected-note synthesis respects relationships, creates a distinct card, 
   expect(savedGroup.groupSummary.relations[0]).toMatchObject({ source: 'source-a', target: 'source-b', relationType: '支持', directed: true });
   await page.reload(); await expect(group).toHaveCount(1); await expect(group.locator('.note-content')).toContainText('綜合摘要');
   await page.getByTestId('restore-input').setInputFiles({ name: 'saved-group.json', mimeType: 'application/json', buffer: exported });
+  await page.getByRole('button', { name: '確認還原', exact: true }).click();
   await expect(group.getByRole('button', { name: /定位來源 N/ })).toHaveCount(3);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: /知識白板/ }).click();

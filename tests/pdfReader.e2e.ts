@@ -1,3 +1,4 @@
+import { openProject } from './projectHelpers';
 import { expect, test, type Page } from '@playwright/test';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 
@@ -8,7 +9,7 @@ async function loadPaper(page: Page) {
     paper.drawText(`Research evidence on page ${i}`, { x: 48, y: 730, font, size: 16 });
     for (let line = 0; line < 25; line++) paper.drawText(`Reading evidence, line ${line + 1}.`, { x: 48, y: 690 - line * 20, font, size: 12 });
   }
-  await page.goto('./');
+  await openProject(page);
   await page.getByTestId('pdf-input').setInputFiles({ name: 'reader-controls.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) });
   await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
   await expect(page.locator('.busy-overlay')).toHaveCount(0);

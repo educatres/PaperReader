@@ -3,10 +3,12 @@ import { Handle, Position, NodeResizer, type Node, type NodeProps } from '@xyflo
 import { ArrowUpRight, ChevronDown, ChevronUp, Languages, Sparkles, Pencil, MoreHorizontal, Quote, X, Link2, FileText, Lightbulb, LoaderCircle, Layers3, Network, Image } from 'lucide-react';
 import { colors, type Note, type Paper, type Highlight } from '../types';
 import { useApp, patchNote, focusSource, deleteNotes, saveEntityDraft, preserveEntityDraft, getWorkspaceEpoch } from '../store';
+import { taskKey } from '../lib/projectContext';
 import { useAI, runNoteAI, cancelTask, providerName } from '../lib/ai';
 import { Modal } from './Modal';
 import { ScreenshotImage } from './ScreenshotImage';
 import { singleNoteText } from '../lib/noteText';
+import { registerEditor, getProjectId } from '../lib/projectContext';
 
 export type ResearchNode = Node<{ note: Note; paper?: Paper; highlight?: Highlight }, 'researchNote'>;
 function draftValues(draft: Note, tags: string): Partial<Note> {
@@ -16,14 +18,20 @@ function draftValues(draft: Note, tags: string): Partial<Note> {
 function NoteEditor({ note, close }: { note: Note; close: () => void }) {
   const [base] = useState(note);
   const [epoch] = useState(getWorkspaceEpoch);
+  const [projectId] = useState(getProjectId);
   const [draft, setDraft] = useState(note); const [tags, setTags] = useState(note.tags.join(', '));
   const editableText = note.type === 'manual-note' || note.type === 'screenshot-note';
   const latest = useRef({ draft, tags }); latest.current = { draft, tags };
   const dismissed = useRef(false);
+  const autoSaved = useRef('');
+  useEffect(() => registerEditor(() => {
+    saveEntityDraft('notes', base, draftValues(latest.current.draft, latest.current.tags), epoch, projectId);
+    autoSaved.current = JSON.stringify(latest.current);
+  }, () => ({ projectId, epoch, base, values: draftValues(latest.current.draft, latest.current.tags) })), [base, epoch, projectId]);
   function finish() { dismissed.current = true; close(); }
   useEffect(() => () => {
     const live = useApp.getState().workspace.notes.find(n => n.id === base.id);
-    if (!dismissed.current && (!live || live.hidden)) void preserveEntityDraft('notes', base, draftValues(latest.current.draft, latest.current.tags), epoch);
+    if (!dismissed.current && JSON.stringify(latest.current) !== autoSaved.current && (!live || live.hidden)) void preserveEntityDraft('notes', base, draftValues(latest.current.draft, latest.current.tags), epoch, projectId);
   }, [base, epoch]);
   return <Modal title="編輯研究便條" description="原文與你的解讀，各自留存。" onClose={finish}>
     <form className="editor-form" onSubmit={e => { e.preventDefault(); saveEntityDraft('notes', base, draftValues(draft, tags), epoch); finish(); }}>
@@ -47,7 +55,7 @@ export const NoteNode = memo(function NoteNode({ data, selected }: NodeProps<Res
   const regroupAnchor = note.groupSummary?.sources.find(source => sources.some(n => n.id === source.noteId && !n.hidden))?.noteId;
   const [tab, setTab] = useState<'original' | 'translation' | 'summary' | 'notes'>(note.type === 'document-summary' || isGroup ? 'summary' : note.type === 'manual-note' ? 'notes' : 'original');
   const [editing, setEditing] = useState(false); const [menu, setMenu] = useState(false);
-  const running = useAI(s => s.running[note.id]); const error = useAI(s => s.errors[note.id]);
+  const running = useAI(s => s.running[taskKey(note.id)]); const error = useAI(s => s.errors[taskKey(note.id)]);
   const aiResult = tab === 'translation' ? note.translation : tab === 'summary' ? note.summary : undefined;
   useEffect(() => { if (note.translation) setTab('translation'); }, [note.translation?.createdAt]);
   useEffect(() => { if (note.summary) setTab('summary'); }, [note.summary?.createdAt]);

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { beginBusyOperation } from '../lib/projectContext';
+import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck, Trash2, Wifi } from 'lucide-react';
 import { useApp } from '../store';
 import { hasKey, setKey, useCredentials, listModels, testConnection, verifyCguKey, providerName, endpoints, type ModelOption } from '../lib/ai';
@@ -17,7 +18,12 @@ export function Settings({ close }: { close: () => void }) {
   useCredentials();
   const [key, setDraftKey] = useState(''); const [show, setShow] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(modelCache[provider] || []);
-  const [busy, setBusy] = useState(''); const [message, setMessage] = useState(''); const [ok, setOk] = useState(false);
+  const [busy, setBusyState] = useState(''); const releaseBusy = useRef<(() => void) | undefined>(undefined);
+  function setBusy(value: string) {
+    if (value && !releaseBusy.current) releaseBusy.current = beginBusyOperation();
+    if (!value) { releaseBusy.current?.(); releaseBusy.current = undefined; }
+    setBusyState(value);
+  } const [message, setMessage] = useState(''); const [ok, setOk] = useState(false);
   useEffect(() => { setDraftKey(''); setModels(modelCache[provider] || []); setMessage(''); setShow(false); }, [provider]);
   useEffect(() => {
     const clearDrafts = () => { setDraftKey(''); setShow(false); };
