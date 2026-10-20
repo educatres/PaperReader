@@ -3,6 +3,7 @@ import { db, loadSharedState, commitChange, holdWindowStorage } from './lib/db';
 import { applyPatches, changesBetween, equal, invertPatches, rebasePatches, type Change, type ConflictDraft, type SyncVersion } from './lib/workspaceChanges';
 import { acknowledge, announceDocument, listenWindows, readerWindow, boardWindow, requestedDocument, requestedViewport, routeSource, send, startWindows, windowId } from './lib/windows';
 import { emptyWorkspace, now, uid, providers, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset } from './types';
+import { erasePdfHighlight, erasePdfTranslation } from './lib/pdfAnnotations';
 
 const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
 function freshBoardWindow() { try { return boardWindow && sessionStorage.getItem('PaperReader.boardInstance') !== windowId; } catch { return boardWindow; } }
@@ -300,6 +301,15 @@ export function deleteNotes(ids: string[], removeHighlight: boolean) {
     } else w.notes.forEach(n => { if (ids.includes(n.id)) n.hidden = true; });
   });
   useApp.setState({ selectedNoteId: undefined });
+}
+export function deletePdfHighlight(id: string) {
+  useApp.getState().edit(w => erasePdfHighlight(w, id));
+  toast('已刪除螢光標註，便條與連線仍保留。可使用復原恢復。');
+}
+export function deletePdfTranslation(paragraphId: string) {
+  const pausesJob = useApp.getState().workspace.pdfTranslationJobs.some(j => j.status === 'running' && j.targets.some(t => t.paragraphId === paragraphId));
+  useApp.getState().edit(w => erasePdfTranslation(w, paragraphId));
+  toast(pausesJob ? '已刪除翻譯備註並暫停相關任務，可手動接續其餘段落。' : '已刪除翻譯備註，可使用復原恢復。');
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') void flushSave(); });
 window.addEventListener('pagehide', event => { void flushSave(); if (event.persisted) useApp.setState({ history: [], future: [] }); });

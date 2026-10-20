@@ -16,7 +16,7 @@ async function loadFixture(page: Page) {
   }
   await page.goto('./');
   await page.getByTestId('pdf-input').setInputFiles({ name: 'columns.pdf', mimeType: 'application/pdf', buffer: Buffer.from(await pdf.save()) });
-  await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
+  await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible({ timeout: 15000 });
   await expect(page.locator('.busy-overlay')).toHaveCount(0);
 }
 async function configure(page: Page) {
@@ -44,6 +44,149 @@ async function saved(page: Page): Promise<any> {
   });
 }
 function result(text: string) { return { status: 'completed', output: [{ content: [{ type: 'output_text', text }] }], usage: { total_tokens: 25 } }; }
+
+test('erase highlight preserves notes and source-page navigation through undo, reload and pack restore', async ({ page }) => {
+  await loadFixture(page);
+  await page.getByLabel('頁碼', { exact: true }).fill('2'); await page.getByLabel('頁碼', { exact: true }).press('Enter');
+  const passage = page.locator('.pdf-page[data-page-index="1"] .textLayer span').first();
+  await expect(passage).toBeVisible();
+  await passage.evaluate(span => {
+    const range = document.createRange(); range.selectNodeContents(span);
+    const selection = getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    span.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+  });
+  await expect(page.locator('.note-card')).toHaveCount(1);
+  await page.getByRole('button', { name: '編輯便條', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '編輯研究便條' });
+  await editor.getByLabel('我的筆記', { exact: true }).fill('刪除螢光標註後依然保留');
+  await editor.getByLabel('標籤').fill('重要,方法');
+  await editor.getByRole('button', { name: '儲存便條', exact: true }).click();
+  await page.route('https://api.openai.com/v1/**', route => route.fulfill({ json: result('便條 AI 內容保留') }));
+  await configure(page);
+  await page.locator('.note-footer').getByRole('button', { name: '翻譯', exact: true }).click();
+  await expect(page.locator('.note-content')).toHaveText('便條 AI 內容保留');
+  await page.locator('.note-footer').getByRole('button', { name: '摘要', exact: true }).click();
+  await expect(page.locator('.note-tabs button.active')).toHaveText('摘要');
+  await expect.poll(async () => (await saved(page)).notes[0].summary?.text).toBe('便條 AI 內容保留');
+  const before = await saved(page); const count = await page.locator('.pdf-highlight').count();
+  expect(count).toBeGreaterThan(0);
+  await page.getByRole('button', { name: '刪除 PDF 標註', exact: true }).click();
+  // Native button activation also works for keyboard-only use.
+  await page.screenshot({ path: 'test-results/pdf-erase-highlight.png' });
+  await page.locator('.pdf-highlight').first().focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('.pdf-highlight')).toHaveCount(0);
+  await expect.poll(async () => (await saved(page)).highlights[0].deletedAt).toBeTruthy();
+  expect((await saved(page)).notes).toEqual(before.notes);
+  await page.getByRole('button', { name: '復原', exact: true }).click();
+  await expect(page.locator('.pdf-highlight')).toHaveCount(count);
+  await page.getByRole('button', { name: '重做', exact: true }).click();
+  await expect(page.locator('.pdf-highlight')).toHaveCount(0);
+  await page.keyboard.press('Escape'); await expect(page.locator('.pdf-erase-notice')).toHaveCount(0);
+  await expect(page.locator('.save-status')).toContainText('已存於本機');
+  await page.reload(); await expect(page.locator('.note-card')).toHaveCount(1);
+  await expect(page.locator('.pdf-highlight')).toHaveCount(0);
+  await page.getByLabel('頁碼', { exact: true }).fill('1'); await page.getByLabel('頁碼', { exact: true }).press('Enter');
+  await expect(page.getByLabel('頁碼', { exact: true })).toHaveValue('1');
+  await page.getByRole('button', { name: '定位原文', exact: true }).click();
+  await expect(page.getByLabel('頁碼', { exact: true })).toHaveValue('2');
+  await expect(page.locator('.pdf-highlight')).toHaveCount(0);
+  await page.getByRole('button', { name: '匯出研究', exact: true }).click();
+  const downloading = page.waitForEvent('download');
+  await page.getByRole('button', { name: /完整研究封裝/ }).click();
+  const pack = await readFile((await (await downloading).path())!);
+  page.on('dialog', d => d.accept());
+  await page.getByRole('button', { name: '文獻庫', exact: true }).click();
+  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await expect(page.locator('.note-card')).toHaveCount(0);
+  await page.getByTestId('restore-input').setInputFiles({ name: 'erased.researchpack', mimeType: 'application/zip', buffer: pack });
+  await expect(page.locator('.note-card')).toHaveCount(1);
+  await expect(page.locator('.pdf-page .textLayer span').first()).toBeVisible();
+  await expect(page.locator('.pdf-highlight')).toHaveCount(0);
+  expect((await saved(page)).notes).toEqual(before.notes);
+  expect((await saved(page)).highlights[0].deletedAt).toBeTruthy();
+});
+
+test('erase translation removes saved parts, supports undo and backups, and only regenerates on explicit start', async ({ page }) => {
+  let requests = 0;
+  await page.route('https://api.openai.com/v1/**', route => { requests++; return route.fulfill({ json: result('逐段中文譯文') }); });
+  await loadFixture(page); await configure(page);
+  const dialog = await manager(page);
+  await dialog.getByRole('button', { name: '開始逐段翻譯', exact: true }).click();
+  await expect(dialog).toContainText('已保存 8 段');
+  await dialog.getByRole('button', { name: '繼續閱讀', exact: true }).click();
+  const first = page.locator('.pdf-translation-marker').first();
+  const id = await first.getAttribute('data-paragraph-id');
+  const locator = page.locator(`.pdf-translation-marker[data-paragraph-id="${id}"]`);
+  await first.click(); await expect(page.locator('.translation-popover')).toBeVisible();
+  await page.getByRole('button', { name: '刪除 PDF 標註', exact: true }).click();
+  await expect(page.locator('.translation-popover')).toHaveCount(0);
+  await first.hover(); await page.waitForTimeout(250); await expect(page.locator('.translation-popover')).toHaveCount(0);
+  await first.click(); await expect(locator).toHaveCount(0);
+  await expect.poll(async () => (await saved(page)).pdfTranslations.length).toBe(7);
+  let data = await saved(page);
+  expect(data.pdfTranslationJobs.every((j: any) => j.targets.every((t: any) => t.paragraphId !== id))).toBe(true);
+  await page.getByRole('button', { name: '復原', exact: true }).click();
+  await expect(locator).toBeVisible();
+  await page.getByRole('button', { name: '重做', exact: true }).click(); await expect(locator).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.save-status')).toContainText('已存於本機');
+  await page.reload(); await expect(page.locator('.pdf-translation-marker').first()).toBeVisible(); await expect(locator).toHaveCount(0);
+  expect(requests).toBe(8);
+  await page.getByRole('button', { name: '匯出研究', exact: true }).click();
+  const downloading = page.waitForEvent('download'); await page.getByRole('button', { name: /完整研究封裝/ }).click();
+  const pack = await readFile((await (await downloading).path())!);
+  const zip = await JSZip.loadAsync(pack); data = JSON.parse(await zip.file('annotations.json')!.async('string'));
+  expect(data.pdfTranslations).toHaveLength(7); expect(data.pdfTranslationJobs[0].targets).toHaveLength(7);
+  page.on('dialog', d => d.accept());
+  await page.getByRole('button', { name: '文獻庫', exact: true }).click();
+  await page.getByRole('button', { name: '清除本機資料', exact: true }).click();
+  await expect(page.locator('.pdf-translation-marker')).toHaveCount(0);
+  await page.getByTestId('restore-input').setInputFiles({ name: 'erased.researchpack', mimeType: 'application/zip', buffer: pack });
+  await expect(page.locator('.pdf-translation-marker').first()).toBeVisible(); await expect(locator).toHaveCount(0);
+  await configure(page);
+  const next = await manager(page); await expect(next).toContainText('已保存 7 段');
+  expect(requests).toBe(8);
+  await next.getByRole('button', { name: '開始逐段翻譯', exact: true }).click();
+  await expect(next).toContainText('已保存 8 段'); expect(requests).toBe(9);
+});
+
+test('deleting a saved translation from another reader aborts the active batch and does not resurrect from a late response', async ({ page, context }) => {
+  let requests = 0; let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('https://api.openai.com/v1/**', async route => {
+    requests++;
+    if (requests === 2) await held;
+    await route.fulfill({ json: result('應可刪除的譯文') }).catch(() => {});
+  });
+  await loadFixture(page); await configure(page);
+  const dialog = await manager(page);
+  await dialog.getByRole('button', { name: '開始逐段翻譯', exact: true }).click();
+  await expect.poll(() => requests).toBe(2);
+  await expect.poll(async () => (await saved(page)).pdfTranslations.length).toBe(1);
+  await dialog.getByRole('button', { name: '繼續閱讀', exact: true }).click();
+  const opening = context.waitForEvent('page'); await page.getByRole('button', { name: '在新視窗閱讀', exact: true }).click();
+  const reader = await opening;
+  const marker = reader.locator('.pdf-translation-marker').first(); await expect(marker).toBeVisible();
+  await reader.getByRole('button', { name: '刪除 PDF 標註', exact: true }).click(); await marker.click();
+  await expect(reader.locator('.pdf-translation-marker')).toHaveCount(0);
+  await expect.poll(async () => (await saved(page)).pdfTranslations.length).toBe(0);
+  release();
+  await page.getByRole('button', { name: '顯示 PDF', exact: true }).click();
+  const paused = await manager(page);
+  await expect(paused.getByRole('button', { name: '接續未完成翻譯', exact: true })).toBeVisible();
+  const data = await saved(page);
+  expect(data.pdfTranslationJobs[0].status).toBe('paused'); expect(data.pdfTranslationJobs[0].targets).toHaveLength(7);
+  expect(data.pdfTranslations).toHaveLength(0); expect(requests).toBe(2);
+  await paused.getByRole('button', { name: '繼續閱讀', exact: true }).click();
+  await expect(page.locator('.pdf-translation-marker')).toHaveCount(0);
+  // Deletion is undoable only in the window where it occurred.
+  await reader.getByRole('button', { name: '復原', exact: true }).click();
+  await expect(reader.locator('.pdf-translation-marker')).toHaveCount(1);
+  await expect(page.locator('.pdf-translation-marker')).toHaveCount(1);
+  await reader.getByRole('button', { name: '重做', exact: true }).click();
+  await expect(page.locator('.pdf-translation-marker')).toHaveCount(0);
+  await reader.close();
+});
 
 test('translates page/column paragraphs, pure hover popup, keyboard, rotation and complete pack restore', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
@@ -137,10 +280,11 @@ test('pause/reload/resume skips saved passages; failed replacement retains reada
 });
 
 test('standalone readers use their own key, block duplicate translation and recover after the owner closes', async ({ page, context }) => {
-  let count = 0; let hold = true;
+  let count = 0; let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
   await context.route('https://api.openai.com/v1/**', async route => {
     count++;
-    if (hold && count === 2) await new Promise(r => setTimeout(r, 1800));
+    if (count === 2) await held;
     try { await route.fulfill({ json: result('跨視窗中文譯文' + count) }); } catch { /* Owner closed. */ }
   });
   await loadFixture(page); await configure(page);
@@ -161,7 +305,7 @@ test('standalone readers use their own key, block duplicate translation and reco
   const peerDialog = await manager(peer);
   await expect(peerDialog.getByRole('button', { name: '接續未完成翻譯', exact: true })).toBeDisabled();
   expect(count).toBe(2);
-  await owner.close(); hold = false;
+  await owner.close(); release();
   await peerDialog.getByRole('button', { name: '繼續閱讀', exact: true }).click();
   const recovered = await manager(peer);
   await expect(recovered.getByRole('button', { name: '接續未完成翻譯', exact: true })).toBeEnabled();

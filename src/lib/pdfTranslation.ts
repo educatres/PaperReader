@@ -91,13 +91,15 @@ export async function runPdfTranslation(documentId: string, options: { resumeId?
       }
       const current: PdfTranslationJob = structuredClone(job);
       const abort = new AbortController(); controller = abort;
+      const targetIds = current.targets.map(t => t.paragraphId).join('\n');
+      let invalidated = false;
       const valid = () => {
         const w = useApp.getState().workspace;
-        return epoch === getWorkspaceEpoch() && w.documents.some(d => d.id === documentId && d.sha256 === current.documentHash)
-          && w.pdfTranslationJobs.some(j => j.id === current.id)
+        return !invalidated && epoch === getWorkspaceEpoch() && w.documents.some(d => d.id === documentId && d.sha256 === current.documentHash)
+          && w.pdfTranslationJobs.some(j => j.id === current.id && j.targets.map(t => t.paragraphId).join('\n') === targetIds)
           && current.targets.every(t => w.pdfParagraphs.some(p => p.id === t.paragraphId && p.sourceHash === t.sourceHash && p.layoutVersion === current.layoutVersion));
       };
-      const unsubscribe = useApp.subscribe(() => { if (!valid()) abort.abort(); });
+      const unsubscribe = useApp.subscribe(() => { if (!valid()) { invalidated = true; abort.abort(); } });
       const save = async () => {
         if (!valid()) throw new Error('研究空間或來源已變更，已停止逐段翻譯。');
         current.updatedAt = now();

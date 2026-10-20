@@ -163,6 +163,11 @@
 }
 
 /* Paragraph translations stay separate from highlights and the PDF canvas. */
+.pdf-erase-notice{display:flex;align-items:center;gap:8px;padding:9px 16px;background:#fbf0e8;color:#805842;font-size:11px;line-height:1.5;border-bottom:1px solid #e7d6c9;flex-shrink:0}
+.pdf-erase-notice>svg{flex-shrink:0}.pdf-erase-notice>span{flex:1}.pdf-erase-notice>button{flex-shrink:0;text-decoration:underline;white-space:nowrap}
+.mode-erase .textLayer{pointer-events:none;user-select:none}.mode-erase .pdf-highlight,.mode-erase .pdf-translation-marker{cursor:crosshair}
+.mode-erase .pdf-highlight:hover,.mode-erase .pdf-highlight:focus-visible{outline:2px solid #a94c39;outline-offset:2px;opacity:.7}
+.mode-erase .pdf-translation-marker:hover,.mode-erase .pdf-translation-marker:focus-visible{background:#f8ddd3;color:#a14431;outline:1px solid #be7763}
 .pdf-translation-layer{position:absolute;inset:0;z-index:4;pointer-events:none}
 .pdf-translation-marker{position:absolute;display:flex;align-items:center;justify-content:center;width:24px;height:24px;transform:translate(-50%,-50%);padding:0;border:0;border-radius:5px;background:#f5f8edeb;color:#557252;pointer-events:auto;cursor:pointer;box-shadow:0 1px 3px #253d2220;touch-action:manipulation}
 .pdf-translation-marker:hover,.pdf-translation-marker:focus-visible,.pdf-translation-marker[aria-expanded=true]{background:#e2edd7;color:#294c30;outline:1px solid #8aa477}

@@ -25,7 +25,7 @@ const legacyWorkspaceSchema = z.object({
   viewport: point.extend({ zoom: z.number().min(0.1).max(5) }),
   documents: z.array(z.object({ id, name: z.string().max(500), sha256: z.string().regex(/^[a-f0-9]{64}$/), size: z.number().nonnegative().max(150 * 1024 * 1024), pageCount: z.number().int().min(1).max(20000), pages: z.array(str).max(20000), createdAt: z.string().max(100) })).max(50),
   highlights: z.array(z.object({ id, documentId: id, noteId: id, pageIndex: z.number().int().nonnegative(), displayPage: z.number().int().min(1), selectedText: str, normalizedText: str, prefix: str, suffix: str,
-    rawText: str.optional(), textQuoteHash: z.string().max(100), textRange: z.object({ start: z.number().int().nonnegative(), end: z.number().int().nonnegative() }),
+    rawText: str.optional(), deletedAt: z.string().max(100).optional(), textQuoteHash: z.string().max(100), textRange: z.object({ start: z.number().int().nonnegative(), end: z.number().int().nonnegative() }),
     quads: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(0).max(1), height: z.number().min(0).max(1) })).max(10000),
     coordinateSystem: z.literal('normalized'), rotation: z.number(), color, status: z.enum(['resolved', 'unresolved']), schemaVersion: z.literal(1), createdAt: z.string().max(100), updatedAt: z.string().max(100) })).max(10000),
   notes: z.array(z.object({ id, documentId: id.optional(), highlightId: id.optional(), type: z.enum(['highlight-note', 'manual-note', 'document-summary', 'group-summary', 'screenshot-note']), title: z.string().max(1000), originalText: str,

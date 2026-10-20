@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type SetStateAction, type PointerEvent as ReactPointerEvent } from 'react';
 import { TextLayer, type PDFDocumentProxy } from 'pdfjs-dist';
-import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan, ExternalLink, PanelLeftClose } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Hand, Highlighter, MousePointer2, Search, X, ZoomIn, ZoomOut, Maximize, RotateCw, FileUp, ScanText, LoaderCircle, Scan, ExternalLink, PanelLeftClose, Eraser } from 'lucide-react';
 import 'pdfjs-dist/web/pdf_viewer.css';
-import { useApp, addHighlight, toast } from '../store';
+import { useApp, addHighlight, deletePdfHighlight, toast } from '../store';
 import { openPaper, sha256 } from '../lib/pdf';
 import { rangeQuads, resolveAnchor, selectionOffsets, normalizeText } from '../lib/anchors';
 import { colors, uid, now, type Color, type Highlight, type Screenshot } from '../types';
@@ -60,6 +60,9 @@ function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights
       const canvas = canvasRef.current!; const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(viewport.width * dpr); canvas.height = Math.floor(viewport.height * dpr);
       const task = page.render({ canvas, viewport, transform: [dpr, 0, 0, dpr, 0, 0] }); render = task;
+      // Cancellation can reject before getTextContent finishes. Attach a handler
+      // immediately; Promise.all below still observes the original render error.
+      void task.promise.catch(() => {});
       const content = await page.getTextContent(); if (cancelled) return;
       const layer = layerRef.current!; layer.replaceChildren();
       textLayer = new TextLayer({ textContentSource: content, container: layer, viewport });
@@ -94,10 +97,10 @@ function PdfPage({ pdf, documentId, pageIndex, width, rotation, mode, highlights
   return <div className={`pdf-page ${mode}`} ref={pageRef} style={{ width, height: width * ratio }} data-page-index={pageIndex} aria-label={`第 ${pageIndex + 1} 頁`}>
     {visible ? <><canvas ref={canvasRef} /><div ref={layerRef} className="textLayer" />
       <div className="highlight-layer">{highlights.flatMap(h => (resolved[h.id] || (rotation === 0 && h.rotation === 0 ? h.quads : [])).map((q, i) =>
-        <button key={`${h.id}-${i}`} data-highlight-id={h.id} title={`定位便條：${h.selectedText.slice(0, 50)}`} aria-label={`定位便條：${h.selectedText.slice(0, 30)}`}
+        <button key={`${h.id}-${i}`} data-highlight-id={h.id} title={`${mode === 'erase' ? '刪除螢光標註（保留便條）' : '定位便條'}：${h.selectedText.slice(0, 50)}`} aria-label={`${mode === 'erase' ? '刪除螢光標註（保留便條）' : '定位便條'}：${h.selectedText.slice(0, 30)}`}
           className={`pdf-highlight ${focused === h.id ? 'focused' : ''}`} style={{ left: `${q.x * 100}%`, top: `${q.y * 100}%`, width: `${q.width * 100}%`, height: `${q.height * 100}%`, backgroundColor: colors[h.color] }}
-          onPointerDown={e => e.stopPropagation()} onClick={() => onFocusNote(h.noteId)} />))}</div>
-      {ready && showTranslations && <PdfTranslationMarkers documentId={documentId} pageIndex={pageIndex} width={width} height={width * ratio} rotation={Number(pageRef.current?.dataset.rotation || 0)} scrollRoot={scrollRoot} blocked={mode === 'screenshot'} />}
+          onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()} onClick={() => mode === 'erase' ? deletePdfHighlight(h.id) : onFocusNote(h.noteId)} />))}</div>
+      {ready && showTranslations && <PdfTranslationMarkers documentId={documentId} pageIndex={pageIndex} width={width} height={width * ratio} rotation={Number(pageRef.current?.dataset.rotation || 0)} scrollRoot={scrollRoot} blocked={mode === 'screenshot'} deleting={mode === 'erase'} />}
       {ready && mode === 'screenshot' && canvasRef.current && <ScreenshotSelection key={`${width}-${rotation}`} canvas={canvasRef.current} documentId={documentId} pageIndex={pageIndex} rotation={Number(pageRef.current?.dataset.rotation || 0)} />}
       {ready && sourceRegion && <div className="screenshot-source-region" aria-label="截圖來源區域" style={{ left: `${sourceRegion.x * 100}%`, top: `${sourceRegion.y * 100}%`, width: `${sourceRegion.width * 100}%`, height: `${sourceRegion.height * 100}%` }} />}
       {!ready && !error && <span className="page-loading"><LoaderCircle className="spin" size={22} /></span>}
@@ -114,7 +117,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   const [translationVisibility, setTranslationVisibility] = useDocumentSetting<'yes' | 'no'>(paper?.id || '', 'translations', 'yes', v => v === 'yes' || v === 'no');
   const translationActive = usePdfTranslation(s => s.active);
   useEffect(() => { setTranslationOpen(false); }, [paper?.id]);
-  const [mode, setMode] = useDocumentSetting<'highlight' | 'select' | 'pan' | 'screenshot'>(paper?.id || '', 'mode', 'highlight', value => ['highlight', 'select', 'pan', 'screenshot'].includes(String(value))); const [color, setColor] = useState<Color>('yellow');
+  const [mode, setMode] = useDocumentSetting<'highlight' | 'select' | 'pan' | 'screenshot' | 'erase'>(paper?.id || '', 'mode', 'highlight', value => ['highlight', 'select', 'pan', 'screenshot', 'erase'].includes(String(value))); const [color, setColor] = useState<Color>('yellow');
   const [zoom, setZoom] = useDocumentSetting<number>(paper?.id || '', 'zoom', 1, value => typeof value === 'number' && value >= .5 && value <= 2.5);
   const [rotation, setRotation] = useDocumentSetting<number>(paper?.id || '', 'rotation', 0, value => typeof value === 'number' && [0, 90, 180, 270].includes(value));
   const [paneWidth, setPaneWidth] = useState(600); const [page, setPage] = useState(preferences.lastPage[paper?.id || ''] || 1); const [pageInput, setPageInput] = useState(String(page));
@@ -126,7 +129,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
   const lastSelection = useRef('');
   const screenshotSource = workspace.notes.find(n => n.id === focusScreenshotNoteId && n.documentId === paper?.id)?.screenshot;
   useEffect(() => {
-    if (mode !== 'screenshot') return;
+    if (mode !== 'screenshot' && mode !== 'erase') return;
     const cancel = (e: KeyboardEvent) => { if (e.key === 'Escape') setMode('select'); };
     window.addEventListener('keydown', cancel); return () => window.removeEventListener('keydown', cancel);
   }, [mode]);
@@ -220,7 +223,8 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         <div className="segmented"><button title="螢光筆：選字後自動新增便條" aria-label="螢光筆模式" aria-pressed={mode === 'highlight'} className={mode === 'highlight' ? 'active' : ''} onClick={() => setMode('highlight')}><Highlighter size={16} /></button>
           <button title="選取與複製文字" aria-label="選字模式" aria-pressed={mode === 'select'} className={mode === 'select' ? 'active' : ''} onClick={() => setMode('select')}><MousePointer2 size={16} /></button>
           <button title="手掌：拖曳移動 PDF" aria-label="手掌模式" aria-pressed={mode === 'pan'} className={mode === 'pan' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode('pan'); }}><Hand size={16} /></button>
-          <button title="拖曳框選 PDF 截圖，Esc 取消" aria-label="截圖模式" aria-pressed={mode === 'screenshot'} className={mode === 'screenshot' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode(mode === 'screenshot' ? 'select' : 'screenshot'); }}><Scan size={16} /></button></div>
+          <button title="拖曳框選 PDF 截圖，Esc 取消" aria-label="截圖模式" aria-pressed={mode === 'screenshot'} className={mode === 'screenshot' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode(mode === 'screenshot' ? 'select' : 'screenshot'); }}><Scan size={16} /></button>
+          <button title="點選螢光標註或翻譯圖示刪除；便條保留，Esc 結束" aria-label="刪除 PDF 標註" aria-pressed={mode === 'erase'} className={mode === 'erase' ? 'active' : ''} onClick={() => { window.getSelection()?.removeAllRanges(); setMode(mode === 'erase' ? 'select' : 'erase'); }}><Eraser size={16} /></button></div>
         <div className="color-palette">{(Object.keys(colors) as Color[]).map(c => <button key={c} className={`color-dot ${color === c ? 'active' : ''}`} style={{ background: colors[c] }} title={`${({ yellow: '黃色', green: '綠色', pink: '粉色', blue: '藍色' })[c]}標記`} aria-label={`${c} highlight`} onClick={() => { setColor(c); setMode('highlight'); }} />)}</div>
         <div className="toolbar-divider" />
         <button className="icon-button" onClick={() => setZoom(z => Math.max(0.5, z - 0.25))} aria-label="縮小 PDF"><ZoomOut size={16} /></button>
@@ -238,6 +242,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
         <span>{hits.length ? `${hit + 1} / ${hits.length} 頁` : query ? '找不到文字' : ''}</span><button className="icon-button" onClick={() => jumpSearch(-1)} aria-label="上一個搜尋結果"><ChevronLeft size={16} /></button><button className="icon-button" onClick={() => jumpSearch(1)} aria-label="下一個搜尋結果"><ChevronRight size={16} /></button><button className="icon-button" onClick={() => setSearchOpen(false)} aria-label="關閉搜尋"><X size={16} /></button></div>}
       {noText && <div className="ocr-notice"><ScanText size={15} />這一頁需要 OCR 才能文字標註；可使用截圖模式留存。</div>}
       {mode === 'screenshot' && <div className="screenshot-notice"><Scan size={15} /><span>在單頁內拖曳框選，放開即新增截圖便條。文字留白，AI 只讀取自行輸入的文字。</span><button onClick={() => setMode('select')}>結束截圖 · Esc</button></div>}
+      {mode === 'erase' && <div className="pdf-erase-notice" role="status"><Eraser size={15} /><span>點選螢光標註或翻譯圖示即可刪除；白板便條保留。可使用復原恢復。</span><button onClick={() => setMode('select')}>結束刪除 · Esc</button></div>}
       <div className={`pdf-scroll mode-${mode}${panning ? ' is-panning' : ''}`} ref={attachRoot}
         onPointerDown={startPan} onPointerMove={movePan} onPointerCancel={stopPan} onLostPointerCapture={stopPan}
         onPointerUp={e => { if (pan.current) stopPan(e); else setTimeout(() => { void captureSelection(); }, 0); }} onKeyUp={e => { if (e.shiftKey) void captureSelection(); }}>
@@ -245,7 +250,7 @@ export function PdfViewer({ onImport, busy, onCollapse, onPopout }: { onImport: 
           Array.from({ length: pdf.numPages }, (_, i) => <PdfPage key={`${paper.id}-${documentEpoch}-${i}`} pdf={pdf} documentId={paper.id} pageIndex={i} width={Math.max(1, paneWidth) * zoom} rotation={rotation} mode={mode}
             showTranslations={translationVisibility === 'yes'}
             focusedScreenshot={screenshotSource?.pageIndex === i ? screenshotSource : undefined}
-            highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
+            highlights={workspace.highlights.filter(h => h.documentId === paper.id && h.pageIndex === i && !h.deletedAt)} focused={focusHighlightId} focusSerial={sourceFocusSerial} scrollRoot={root} onActivate={activate} onFocusNote={focusNote} onUnresolved={unresolved} />)
           : <div className="loading-state"><LoaderCircle className="spin" />正在開啟文獻…</div>}
       </div>
     </> : <>{onCollapse && <button className="icon-button empty-pdf-collapse" title="隱藏 PDF 面板" aria-label="隱藏 PDF 面板" onClick={onCollapse}><PanelLeftClose size={17} /></button>}<div className="reader-empty"><div className="paper-illustration"><div /><div /><Highlighter size={29} /></div><span className="eyebrow">你的下一個發現，從這裡開始</span><h2>留住值得思考的每一句。</h2><p>放入一篇論文，標記觸動你的段落，<br />把零散的想法串成自己的知識。</p><button className="primary-button" onClick={onImport}><FileUp size={17} />匯入你的第一篇 PDF</button><span className="empty-hint">也可以將 PDF 直接拖進視窗</span></div></>}

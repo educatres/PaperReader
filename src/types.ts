@@ -18,6 +18,8 @@ export interface Highlight {
   textQuoteHash: string; textRange: { start: number; end: number };
   quads: Quad[]; coordinateSystem: 'normalized'; rotation: number;
   color: Color; status: 'resolved' | 'unresolved'; schemaVersion: 1;
+  // Keep the source anchor for the note after erasing its PDF overlay.
+  deletedAt?: string;
   createdAt: string; updatedAt: string;
 }
 export interface AIResult {
