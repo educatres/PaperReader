@@ -5,8 +5,9 @@ import { acknowledge, announceDocument, listenWindows, readerWindow, boardWindow
 import { captureContext, isCurrentContext, getProjectId, requireProjectId, changeProjectContext, projectStorageKey, projectLock, hasBusyOperation, saveOpenEditors, snapshotOpenEditors, stopOwnedTasks } from './lib/projectContext';
 import { emptyWorkspace, now, uid, providers, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset, type ProjectView } from './types';
 import { erasePdfHighlight, erasePdfTranslation } from './lib/pdfAnnotations';
+import { defaultCguModel } from './lib/cgu';
 
-const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-oss:20b', mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
+const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: defaultCguModel, mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
 const viewKind = (route: ProjectRoute) => route.view === 'projects' ? 'main' : route.view;
 function sessionValue(key: string) { try { return JSON.parse(sessionStorage.getItem(key) || '{}'); } catch { return {}; } }
 function localViewKey(name: string, id = getProjectId(), route = useApp.getState().route) { return projectStorageKey(name + '.' + viewKind(route), id); }
@@ -15,8 +16,10 @@ function readPreferences(id?: string, route: ProjectRoute = parseRoute(), recent
   const legacy = id === 'default' && !recent ? { ...shared, ...sessionValue('PaperReader.readingPreferences') } : {};
   const p = { ...recent, ...legacy, ...(id ? sessionValue(projectStorageKey('readingPreferences.' + viewKind(route), id)) : {}) };
   const pdfCollapsed = p.pdfCollapsed === true;
+  const models = { ...defaultPreferences.models, ...Object.fromEntries(providers.filter(provider => typeof shared.models?.[provider] === 'string').map(provider => [provider, shared.models[provider]])) };
+  if (models.cgu === 'gpt-6-luna' || models.cgu === 'gpt-5.6-luna') models.cgu = defaultCguModel;
   return { ...defaultPreferences, provider: providers.includes(shared.provider) ? shared.provider : 'openai',
-    models: { ...defaultPreferences.models, ...Object.fromEntries(providers.filter(provider => typeof shared.models?.[provider] === 'string').map(provider => [provider, shared.models[provider]])) },
+    models,
     reasoningEffort: reasoningEfforts.includes(shared.reasoningEffort) ? shared.reasoningEffort : 'medium',
     toolbarCollapsed: p.toolbarCollapsed === true, pdfCollapsed, boardCollapsed: !pdfCollapsed && p.boardCollapsed === true,
     split: typeof p.split === 'number' ? Math.max(30, Math.min(75, p.split)) : 54, lastPage: p.lastPage || {} };

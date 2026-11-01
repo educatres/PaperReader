@@ -40,7 +40,7 @@ test('CGU presets use model-appropriate direct endpoints with isolated session k
   await page.route('https://air.cgu.edu.tw/cgullmapi/v1/**', route => {
     const request = route.request();
     requests.push({ url: request.url(), auth: request.headers().authorization, body: request.postDataJSON() });
-    if (request.url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'department/research-v2' }, { id: 'gpt-oss:20b' }, { id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } });
+    if (request.url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'gemma-4-26b-a4b-it' }, { id: 'gpt-oss:20b' }, { id: 'gpt-oss-120b' }] } });
     return request.url().endsWith('/chat/completions')
       ? route.fulfill({ json: { choices: [{ message: { content: 'CGU 測試翻譯。' } }], usage: { total_tokens: 30 } } })
       : route.fulfill({ json: { status: 'completed', output: [{ type: 'reasoning', content: [] }, { content: [{ type: 'output_text', text: 'CGU 測試翻譯。' }] }], usage: { total_tokens: 30 } } });
@@ -59,6 +59,7 @@ test('CGU presets use model-appropriate direct endpoints with isolated session k
   await expect(page.getByLabel('你的 API key')).toHaveValue('');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
   await expect(page.getByLabel('模型選項')).toHaveValue('gpt-oss:20b');
+  await expect(page.getByLabel('模型選項').locator('option')).toHaveText(['gemma-4-26b-a4b-it', 'gpt-oss:20b', 'gpt-oss-120b']);
   await expect(page.getByLabel('推理程度')).toHaveValue('medium');
   await page.getByLabel('你的 API key').fill('cgu-secret-never-persist');
   await page.getByRole('button', { name: '使用此金鑰' }).click();
@@ -66,22 +67,17 @@ test('CGU presets use model-appropriate direct endpoints with isolated session k
   await expect(page.locator('.settings-message')).toContainText('連線成功');
   expect(requests.at(-1)!.url).toBe('https://air.cgu.edu.tw/cgullmapi/v1/chat/completions');
   expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-oss:20b', messages: [{ role: 'system' }, { role: 'user', content: expect.stringContaining('Research source for translation.') }] });
-  await page.getByLabel('模型選項').selectOption('gpt-5.6-luna');
+  await page.getByLabel('模型選項').selectOption('gpt-oss-120b');
   await page.getByLabel('推理程度').selectOption('high');
   await page.getByRole('button', { name: '完成', exact: true }).click();
   await page.locator('.note-footer').getByRole('button', { name: '翻譯', exact: true }).click();
   await expect(page.locator('.note-content')).toContainText('CGU 測試翻譯。');
-  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-5.6-luna', reasoning: { effort: 'high' } });
+  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-oss-120b', reasoning: { effort: 'high' } });
   expect(requests.at(-1)!.body.input).toContain('Research source for translation.');
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
   await page.getByRole('button', { name: '取得模型清單' }).click();
   await expect(page.locator('.settings-message')).toContainText('已取得 3 個模型');
-  await page.getByLabel('模型選項').selectOption('custom');
-  await page.getByLabel('選擇模型').fill('department/research-v2');
-  await page.getByLabel('推理程度').selectOption('low');
-  await page.getByRole('button', { name: /測試連線/ }).click();
-  await expect(page.locator('.settings-message')).toContainText('連線成功');
-  expect(requests.at(-1)!.body).toMatchObject({ model: 'department/research-v2', reasoning: { effort: 'low' } });
+  await expect(page.getByLabel('模型選項')).toHaveValue('gpt-oss-120b');
   expect(requests.every(r => r.auth === 'Bearer cgu-secret-never-persist')).toBe(true);
   await page.getByRole('button', { name: 'OpenAI', exact: true }).click();
   await expect(page.getByLabel('你的 API key')).toHaveAccessibleName(/本分頁已設定/);
@@ -108,11 +104,11 @@ test('CGU presets use model-appropriate direct endpoints with isolated session k
   await page.getByRole('button', { name: /JSON 註記資料/ }).click();
   const exported = await readFile((await (await downloading).path())!, 'utf8');
   expect(exported).not.toContain('secret-never-persist');
-  expect(JSON.parse(exported).notes[0].translation).toMatchObject({ provider: 'cgu', model: 'gpt-5.6-luna', reasoningEffort: 'high' });
+  expect(JSON.parse(exported).notes[0].translation).toMatchObject({ provider: 'cgu', model: 'gpt-oss-120b', reasoningEffort: 'high' });
   await page.reload();
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
-  await expect(page.getByLabel('選擇模型')).toHaveValue('department/research-v2');
-  await expect(page.getByLabel('推理程度')).toHaveValue('low');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-oss-120b');
+  await expect(page.getByLabel('推理程度')).toHaveValue('high');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
 });
 

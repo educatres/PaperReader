@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 test('old CGU settings use direct HTTPS for normalized key verification and generation', async ({ page }) => {
   await page.addInitScript(() => {
     if (!localStorage.getItem('PaperReader.preferences')) localStorage.setItem('PaperReader.preferences', JSON.stringify({
-      provider: 'cgu', cguConnection: 'localhost', models: { cgu: 'gpt-5.6-luna' }, reasoningEffort: 'high',
+      provider: 'cgu', cguConnection: 'localhost', models: { cgu: 'gpt-oss-120b' }, reasoningEffort: 'high',
     }));
   });
   const calls: { url: string; headers: Record<string, string>; body: any }[] = [];
@@ -14,7 +14,7 @@ test('old CGU settings use direct HTTPS for normalized key verification and gene
     const request = route.request();
     calls.push({ url: request.url(), headers: request.headers(), body: request.postDataJSON() });
     return request.url().endsWith('/models')
-      ? route.fulfill({ json: { data: [{ id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } })
+      ? route.fulfill({ json: { data: [{ id: 'gemma-4-26b-a4b-it' }, { id: 'gpt-oss:20b' }, { id: 'gpt-oss-120b' }] } })
       : route.fulfill({ json: { status: 'completed', output: [{ content: [{ type: 'output_text', text: 'OK' }] }] } });
   });
   await openProject(page);
@@ -23,7 +23,7 @@ test('old CGU settings use direct HTTPS for normalized key verification and gene
   await expect(dialog).toContainText('瀏覽器直接連線至 CGU API');
   await expect(dialog).not.toContainText('本機助手');
   await expect(page.getByLabel('CGU 連線方式')).toHaveCount(0);
-  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-5.6-luna');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-oss-120b');
   await expect(page.getByLabel('推理程度')).toHaveValue('high');
   for (const key of ['test-cgu-session-secret', 'Bearer test-cgu-session-secret', 'Authorization: Bearer test-cgu-session-secret']) {
     await page.getByLabel('你的 API key').fill(key);
@@ -35,7 +35,7 @@ test('old CGU settings use direct HTTPS for normalized key verification and gene
   expect(calls.every(call => call.url.endsWith('/models'))).toBe(true);
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('連線成功');
-  expect(calls.at(-1)).toMatchObject({ url: 'https://air.cgu.edu.tw/cgullmapi/v1/responses', body: { model: 'gpt-5.6-luna', store: false, reasoning: { effort: 'high' } } });
+  expect(calls.at(-1)).toMatchObject({ url: 'https://air.cgu.edu.tw/cgullmapi/v1/responses', body: { model: 'gpt-oss-120b', store: false, reasoning: { effort: 'high' } } });
   expect(calls.every(call => call.headers.authorization === 'Bearer test-cgu-session-secret' && !call.headers['x-paperreader-token'])).toBe(true);
   expect(loopback).toEqual([]);
   const policy = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
@@ -46,7 +46,7 @@ test('old CGU settings use direct HTTPS for normalized key verification and gene
   expect(stored).not.toContain('test-cgu-session-secret');
   await page.reload();
   await page.getByRole('button', { name: '連接你的 AI', exact: true }).click();
-  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-5.6-luna');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-oss-120b');
   await expect(page.getByLabel('推理程度')).toHaveValue('low');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
   await expect(page.getByRole('button', { name: '驗證 CGU 金鑰', exact: true })).toBeDisabled();

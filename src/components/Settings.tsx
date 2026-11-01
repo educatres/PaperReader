@@ -3,23 +3,25 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck, Trash2, Wifi } from 'lucide-react';
 import { useApp } from '../store';
 import { hasKey, setKey, useCredentials, listModels, testConnection, verifyCguKey, providerName, endpoints, type ModelOption } from '../lib/ai';
-import { cguDocs, cguKeyPage } from '../lib/cgu';
+import { cguDocs, cguKeyPage, cguModelPresets } from '../lib/cgu';
 import { Modal } from './Modal';
 import { providers, reasoningEfforts, reasoningLabels, usesReasoningEffort, type Provider, type ReasoningEffort } from '../types';
 
 const modelCache: Partial<Record<Provider, ModelOption[]>> = {};
 const presets = ['gpt-6-luna', 'gpt-5.6-luna'];
-const cguPresets = ['gpt-oss:20b', ...presets];
+const cguPresets: string[] = [...cguModelPresets];
 const preferredGeminiModel = 'gemini-flash-lite-latest';
 const keyLinks: Record<Provider, string> = { openai: 'https://platform.openai.com/api-keys', gemini: 'https://aistudio.google.com/api-keys', cgu: cguKeyPage, mercuryapi: 'https://air.cgu.edu.tw/mercuryapi/#redeem', grok: 'https://console.x.ai/' };
 export function Settings({ close }: { close: () => void }) {
   const { preferences, pref } = useApp();
   const provider = preferences.provider; const model = preferences.models[provider];
   const availablePresets = provider === 'cgu' ? cguPresets : presets;
+  const isCgu = provider === 'cgu';
   const detectsModels = provider === 'mercuryapi' || provider === 'grok';
   useCredentials();
   const [key, setDraftKey] = useState(''); const [show, setShow] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(modelCache[provider] || []);
+  const visibleModels = isCgu ? models.filter(option => cguPresets.includes(option.id)) : models;
   const [busy, setBusyState] = useState(''); const releaseBusy = useRef<(() => void) | undefined>(undefined);
   function setBusy(value: string) {
     if (value && !releaseBusy.current) releaseBusy.current = beginBusyOperation();
@@ -97,11 +99,12 @@ export function Settings({ close }: { close: () => void }) {
       {provider === 'gemini' || detectsModels ? <select aria-label="模型選項" className="full-input" value={model} disabled={!!busy} onChange={e => changeModel(e.target.value)}>
         <option value="">請選擇模型</option>{model && !models.some(m => m.id === model) && <option value={model}>自訂：{model}</option>}
         {models.map(m => <option key={m.id} value={m.id}>{m.label} · {m.id}</option>)}
-      </select> : <select aria-label="模型選項" className="full-input" value={availablePresets.includes(model) ? model : 'custom'} disabled={!!busy} onChange={e => { changeModel(e.target.value === 'custom' ? '' : e.target.value); if (e.target.value === 'custom') document.getElementById('model-id')?.focus(); }}>
-        {availablePresets.map(id => <option key={id} value={id}>{id}</option>)}<option value="custom">自訂模型 ID</option>
+      </select> : <select aria-label="模型選項" className="full-input" value={availablePresets.includes(model) ? model : isCgu ? '' : 'custom'} disabled={!!busy} onChange={e => { changeModel(e.target.value === 'custom' ? '' : e.target.value); if (e.target.value === 'custom') document.getElementById('model-id')?.focus(); }}>
+        {!availablePresets.includes(model) && isCgu && <option value="" hidden>自訂模型 ID</option>}
+        {availablePresets.map(id => <option key={id} value={id}>{id}</option>)}{!isCgu && <option value="custom">自訂模型 ID</option>}
       </select>}
       <input id="model-id" list="provider-models" value={model} onChange={e => changeModel(e.target.value.trim())} placeholder="輸入自訂模型 ID，或從取得的清單選擇" autoComplete="off" className="full-input" disabled={!!busy} />
-      <datalist id="provider-models">{models.map(m => <option key={m.id} value={m.id}>{m.label} · {m.capability}</option>)}</datalist>
+      <datalist id="provider-models">{visibleModels.map(m => <option key={m.id} value={m.id}>{m.label} · {m.capability}</option>)}</datalist>
       <p className="field-help">預設選項與模型清單不保證帳戶有權限；請用測試連線確認。計費依你的供應商帳戶。</p>
       <div className="reasoning-field"><label className="field-label" htmlFor="reasoning-effort">推理程度</label>
         <select id="reasoning-effort" className="full-input" value={preferences.reasoningEffort} disabled={!usesReasoningEffort(provider) || !!busy} onChange={e => pref({ reasoningEffort: e.target.value as ReasoningEffort })} aria-describedby="reasoning-help">{reasoningEfforts.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}{effort === 'medium' ? '（預設）' : ''}</option>)}</select>
