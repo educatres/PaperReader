@@ -35,13 +35,14 @@ test('top toolbar collapses, persists, and remains recoverable on narrow screens
   await page.getByRole('dialog').screenshot({ path: 'test-results/cgu-settings-mobile.png' });
 });
 
-test('CGU presets, custom models and reasoning use direct Responses with isolated session keys', async ({ page }) => {
+test('CGU presets use model-appropriate direct endpoints with isolated session keys', async ({ page }) => {
   const requests: { url: string; auth?: string; body: any }[] = [];
   await page.route('https://air.cgu.edu.tw/cgullmapi/v1/**', route => {
     const request = route.request();
     requests.push({ url: request.url(), auth: request.headers().authorization, body: request.postDataJSON() });
-    return request.url().endsWith('/models')
-      ? route.fulfill({ json: { data: [{ id: 'department/research-v2' }, { id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } })
+    if (request.url().endsWith('/models')) return route.fulfill({ json: { data: [{ id: 'department/research-v2' }, { id: 'gpt-oss:20b' }, { id: 'gpt-6-luna' }, { id: 'gpt-5.6-luna' }] } });
+    return request.url().endsWith('/chat/completions')
+      ? route.fulfill({ json: { choices: [{ message: { content: 'CGU 測試翻譯。' } }], usage: { total_tokens: 30 } } })
       : route.fulfill({ json: { status: 'completed', output: [{ type: 'reasoning', content: [] }, { content: [{ type: 'output_text', text: 'CGU 測試翻譯。' }] }], usage: { total_tokens: 30 } } });
   });
   await openProject(page);
@@ -63,7 +64,8 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   await page.getByRole('button', { name: '使用此金鑰' }).click();
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('連線成功');
-  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-oss:20b', store: false, reasoning: { effort: 'medium' } });
+  expect(requests.at(-1)!.url).toBe('https://air.cgu.edu.tw/cgullmapi/v1/chat/completions');
+  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-oss:20b', messages: [{ role: 'system' }, { role: 'user', content: expect.stringContaining('Research source for translation.') }] });
   await page.getByLabel('模型選項').selectOption('gpt-5.6-luna');
   await page.getByLabel('推理程度').selectOption('high');
   await page.getByRole('button', { name: '完成', exact: true }).click();

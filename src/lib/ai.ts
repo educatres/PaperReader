@@ -37,7 +37,7 @@ function readableError(status: number, raw: string, provider: Provider) {
   if (provider === 'cgu') {
     if (status === 401) return 'CGU 金鑰驗證失敗（401）。請確認已在 CGU API Key 頁面啟用金鑰，並重新複製。';
     if (status === 403) return 'CGU 拒絕此模型或操作（403）：請確認模型權限、Token 額度與 OpenAI 美元額度；不一定是金鑰錯誤。';
-    if (status === 404) return 'CGU 找不到此模型或端點（404）。請取得模型清單，並確認模型支援 Responses API。';
+    if (status === 404) return 'CGU 找不到此模型或端點（404）。請取得模型清單，並確認模型支援目前使用的 API 端點。';
   }
   if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid/i.test(raw)) return 'API key 無效、權限不足或模型未開放，請檢查設定。';
   if (status === 429) return '供應商額度不足或請求過於頻繁（429）。請檢查計費與配額，再手動重試。';
@@ -103,12 +103,22 @@ export async function generate(provider: Provider, model: string, instruction: s
   const input = `任務：${instruction}\n\n<research_source>\n${text}\n</research_source>`;
   let result: string; let usage: number | undefined;
   if (provider !== 'gemini') {
-    // Grok models differ in supported effort values; leave reasoning at the model default.
-    const data = await request(provider, '/responses', { model, instructions: guard, input, store: false, ...(usesReasoningEffort(provider) ? { reasoning: { effort: reasoningEffort } } : {}) }, signal);
-    result = (data.output || []).flatMap((o: { content?: { type: string; text?: string }[] }) => o.content || [])
-      .filter((c: { type: string }) => c.type === 'output_text').map((c: { text: string }) => c.text).join('\n');
+    const useChatCompletions = provider === 'cgu' && model === 'gpt-oss:20b';
+    const data = await request(provider, useChatCompletions ? '/chat/completions' : '/responses', useChatCompletions
+      ? { model, messages: [{ role: 'system', content: guard }, { role: 'user', content: input }] }
+      : { model, instructions: guard, input, store: false, ...(usesReasoningEffort(provider) ? { reasoning: { effort: reasoningEffort } } : {}) }, signal);
+    if (useChatCompletions) {
+      const content = data.choices?.[0]?.message?.content;
+      result = typeof content === 'string' ? content : Array.isArray(content)
+        ? content.filter((part: { type?: string; text?: unknown }) => part?.type === 'text' && typeof part.text === 'string').map((part: { text: string }) => part.text).join('\n')
+        : '';
+    } else {
+      // Grok models differ in supported effort values; leave reasoning at the model default.
+      result = (data.output || []).flatMap((o: { content?: { type: string; text?: string }[] }) => o.content || [])
+        .filter((c: { type: string }) => c.type === 'output_text').map((c: { text: string }) => c.text).join('\n');
+    }
     usage = data.usage?.total_tokens;
-    if (data.status === 'incomplete') throw new Error('模型未能完成回應，請換模型或縮短內容後重試。原有結果已保留。');
+    if (!useChatCompletions && data.status === 'incomplete') throw new Error('模型未能完成回應，請換模型或縮短內容後重試。原有結果已保留。');
   } else {
     const data = await request(provider, `/models/${encodeURIComponent(model)}:generateContent`, {
       systemInstruction: { parts: [{ text: guard }] }, contents: [{ role: 'user', parts: [{ text: input }] }],

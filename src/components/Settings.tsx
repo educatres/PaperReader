@@ -48,7 +48,7 @@ export function Settings({ close }: { close: () => void }) {
   }
   async function verify() {
     setBusy('verify'); setMessage('');
-    try { applyDraftKey(); const result = await verifyCguKey(); modelCache.cgu = result; setModels(result); setOk(true); setMessage(`CGU 金鑰已通過驗證，已取得 ${result.length} 個模型。此驗證沒有送出文字生成請求；模型的 Responses 能力請再測試連線。`); }
+    try { applyDraftKey(); const result = await verifyCguKey(); modelCache.cgu = result; setModels(result); setOk(true); setMessage(`CGU 金鑰已通過驗證，已取得 ${result.length} 個模型。此驗證沒有送出文字生成請求；模型的文字生成能力請再測試連線。`); }
     catch (e) { setOk(false); setMessage((e as Error).message); }
     finally { setBusy(''); }
   }
@@ -83,7 +83,7 @@ export function Settings({ close }: { close: () => void }) {
       <div className="api-endpoint"><span>Base URL</span><code>{endpoints[provider]}</code></div>
       {provider === 'cgu' && <section className="cgu-connection">
         <p className="field-help">瀏覽器直接連線至 CGU API。</p>
-        <p className="field-help"><a href={cguDocs} target="_blank" rel="noreferrer">CGU 官方 API 說明</a> · 本程式使用 Bearer 授權與 Responses API；自訂模型也須支援 Responses。</p>
+        <p className="field-help"><a href={cguDocs} target="_blank" rel="noreferrer">CGU 官方 API 說明</a> · 一般 CGU 模型使用 Responses API；`gpt-oss:20b` 使用 Chat Completions。</p>
       </section>}
       <div className="privacy-card"><ShieldCheck size={22} /><div><strong>金鑰只暫存在記憶體。</strong><p>不儲存至硬碟、localStorage、資料庫或 GitHub。重新整理或關閉分頁後，需重新輸入。呼叫時以 HTTPS 傳給所選供應商驗證。</p></div></div>
       <label className="field-label" htmlFor="api-key">你的 API key <span>{hasKey(provider) ? <><Check size={12} />本分頁已設定</> : '尚未設定'}</span></label>

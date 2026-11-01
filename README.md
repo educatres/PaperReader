@@ -100,7 +100,7 @@ Base URL 為 `https://air.cgu.edu.tw/mercuryapi/v1`。在「連接你的 AI → 
 
 ### CGU 連線
 
-依 [CGU 官方文件](https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html)，Base URL 為 `https://air.cgu.edu.tw/cgullmapi/v1`，使用 `Authorization: Bearer 金鑰` 與 Responses API。請先到 [CGU API Key 頁面](https://air.cgu.edu.tw/workspace4/LLMAPI/index.php) 啟用、複製金鑰。可直接貼上純金鑰，或包含 `Bearer`／`Authorization: Bearer` 前綴。
+依 [CGU 官方文件](https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html)，Base URL 為 `https://air.cgu.edu.tw/cgullmapi/v1`，使用 `Authorization: Bearer 金鑰`。一般 CGU 模型使用 Responses API；預設的 `gpt-oss:20b` 依官方模型目錄使用 Chat Completions。請先到 [CGU API Key 頁面](https://air.cgu.edu.tw/workspace4/LLMAPI/index.php) 啟用、複製金鑰。可直接貼上純金鑰，或包含 `Bearer`／`Authorization: Bearer` 前綴。
 
 CGU 已支援 CORS，程式一律由瀏覽器以 HTTPS 直接連線。
 
@@ -131,7 +131,7 @@ Gemini 成功取得模型清單後，若可用文字模型中包含 `gemini-flas
 - 截圖便條的翻譯／摘要使用自行輸入的文字與筆記，不傳送或分析圖片；建立截圖不觸發 AI。
 - 關聯摘要確認後，只傳送預覽群組的便條文字與連線屬性，不傳送其他群組或原始 PDF。
 - 全文摘要先取得明確同意，再傳送**當前 PDF 的分塊文字**。不傳送原始 PDF、其他文獻或整個工作區。
-- OpenAI／CGU／mercuryapi 使用 Responses API，設 `store: false` 與 `reasoning.effort`；Grok 同樣使用 Responses API 與 `store: false`，推理採模型預設。此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
+- OpenAI／CGU／mercuryapi 使用 Responses API，設 `store: false` 與 `reasoning.effort`；CGU 的 `gpt-oss:20b` 依模型能力改用 Chat Completions。Grok 同樣使用 Responses API 與 `store: false`，推理採模型預設。此設定不取代供應商的資料處理與保留政策。Gemini 使用 `generateContent`，不傳送 OpenAI 專用推理參數。
 - PDF、便條與 AI 回應都作為不可信內容處理。模型沒有工具權限，回應以 React 文字呈現，不執行 HTML。
 - 所有 JavaScript、PDF worker、字型、CJK 字元映射及 WebAssembly 隨網站提供，沒有第三方 CDN。CSP 限制連線至同源、OpenAI、CGU／mercuryapi 與 Gemini API 網域。
 - 模型清單由官方接口取得；清單可見不代表具備文字任務權限，請測試。使用者承擔供應商計費。

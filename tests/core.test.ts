@@ -8,7 +8,7 @@ vi.stubGlobal('document', { addEventListener: () => {} });
 vi.stubGlobal('localStorage', { getItem: () => null });
 vi.mock('../src/lib/pdf', () => ({ sha256: async () => '', resetPdfCache: () => {} }));
 const { validateWorkspace, readImport } = await import('../src/lib/transfer');
-const { chunkDocument, setKey, hasKey, clearAllKeys } = await import('../src/lib/ai');
+const { chunkDocument, generate, setKey, hasKey, clearAllKeys } = await import('../src/lib/ai');
 const { normalizeText } = await import('../src/lib/anchors');
 const { prepareGroupSummary } = await import('../src/lib/groupSummary');
 function manualNote(): Note { return { id: 'note-1', type: 'manual-note', title: 'Idea', originalText: '', userNotes: 'Evidence', tags: [], position: { x: 0, y: 0 }, width: 320, collapsed: false, hidden: false, color: 'yellow', updatedAt: now() }; }
@@ -102,5 +102,28 @@ describe('session-only credentials', () => {
     clearAllKeys(); expect(hasKey('gemini')).toBe(false); expect(hasKey('cgu')).toBe(false); expect(hasKey('mercuryapi')).toBe(false);
     expect(hasKey('grok')).toBe(false);
     expect(JSON.stringify(emptyWorkspace())).not.toContain('test-key');
+  });
+});
+describe('CGU local model transport', () => {
+  it('uses Chat Completions for gpt-oss:20b', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: 'CGU local response' } }], usage: { total_tokens: 12 } }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    setKey('cgu', 'test-cgu-key');
+
+    const result = await generate('cgu', 'gpt-oss:20b', 'Reply briefly.', 'Evidence text.');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://air.cgu.edu.tw/cgullmapi/v1/chat/completions');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      model: 'gpt-oss:20b',
+      messages: [
+        { role: 'system' },
+        { role: 'user', content: expect.stringContaining('Evidence text.') },
+      ],
+    });
+    expect(result).toMatchObject({ provider: 'cgu', model: 'gpt-oss:20b', text: 'CGU local response', usage: 12 });
+    clearAllKeys();
   });
 });
