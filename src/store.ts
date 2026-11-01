@@ -6,7 +6,7 @@ import { captureContext, isCurrentContext, getProjectId, requireProjectId, chang
 import { emptyWorkspace, now, uid, providers, reasoningEfforts, type Workspace, type Preferences, type Note, type Relation, type Highlight, type Paper, type Point, type Screenshot, type ImageAsset, type ProjectView } from './types';
 import { erasePdfHighlight, erasePdfTranslation } from './lib/pdfAnnotations';
 
-const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-6-luna', mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
+const defaultPreferences: Preferences = { provider: 'openai', models: { openai: 'gpt-6-luna', gemini: '', cgu: 'gpt-oss:20b', mercuryapi: '', grok: '' }, reasoningEffort: 'medium', toolbarCollapsed: false, pdfCollapsed: false, boardCollapsed: false, split: 54, lastPage: {} };
 const viewKind = (route: ProjectRoute) => route.view === 'projects' ? 'main' : route.view;
 function sessionValue(key: string) { try { return JSON.parse(sessionStorage.getItem(key) || '{}'); } catch { return {}; } }
 function localViewKey(name: string, id = getProjectId(), route = useApp.getState().route) { return projectStorageKey(name + '.' + viewKind(route), id); }

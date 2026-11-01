@@ -57,13 +57,13 @@ test('CGU presets, custom models and reasoning use direct Responses with isolate
   await expect(page.getByLabel('CGU 連線方式')).toHaveCount(0);
   await expect(page.getByLabel('你的 API key')).toHaveValue('');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
-  await expect(page.getByLabel('模型選項')).toHaveValue('gpt-6-luna');
+  await expect(page.getByLabel('模型選項')).toHaveValue('gpt-oss:20b');
   await expect(page.getByLabel('推理程度')).toHaveValue('medium');
   await page.getByLabel('你的 API key').fill('cgu-secret-never-persist');
   await page.getByRole('button', { name: '使用此金鑰' }).click();
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('連線成功');
-  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-6-luna', store: false, reasoning: { effort: 'medium' } });
+  expect(requests.at(-1)!.body).toMatchObject({ model: 'gpt-oss:20b', store: false, reasoning: { effort: 'medium' } });
   await page.getByLabel('模型選項').selectOption('gpt-5.6-luna');
   await page.getByLabel('推理程度').selectOption('high');
   await page.getByRole('button', { name: '完成', exact: true }).click();
@@ -124,7 +124,7 @@ test('older preferences retain custom models and adopt medium reasoning', async 
   await expect(page.getByLabel('模型選項')).toHaveValue('custom');
   await expect(page.getByLabel('推理程度')).toHaveValue('medium');
   await page.getByRole('button', { name: 'CGU API', exact: true }).click();
-  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-6-luna');
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-oss:20b');
   await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('my-gemini');
   await page.getByRole('button', { name: 'mercuryapi', exact: true }).click();
