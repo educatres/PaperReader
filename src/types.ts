@@ -1,6 +1,7 @@
 export type Color = 'yellow' | 'green' | 'pink' | 'blue';
 export const providers = ['openai', 'cgu', 'gemini', 'mercuryapi', 'grok'] as const;
 export type Provider = typeof providers[number];
+export const isProviderAvailable = (provider: Provider) => provider !== 'openai' && provider !== 'grok';
 export const usesReasoningEffort = (provider: Provider) => provider !== 'gemini' && provider !== 'grok';
 export const reasoningEfforts = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = typeof reasoningEfforts[number];
