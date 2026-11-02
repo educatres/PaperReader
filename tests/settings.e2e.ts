@@ -125,9 +125,6 @@ test('older preferences retain custom models and adopt medium reasoning', async 
   await expect(page.getByLabel('選擇模型')).toHaveValue('gpt-oss:20b');
   await page.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('my-gemini');
-  await page.getByRole('button', { name: 'mercuryapi', exact: true }).click();
-  await expect(page.getByLabel('選擇模型')).toHaveValue('');
-  await expect(page.getByLabel('模型選項')).toHaveValue('');
   await page.getByRole('button', { name: 'Grok（xAI）', exact: true }).click();
   await expect(page.getByLabel('選擇模型')).toHaveValue('');
   await expect(page.getByLabel('模型選項')).toHaveValue('');

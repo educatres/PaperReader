@@ -1,6 +1,6 @@
 import { beginBusyOperation } from '../lib/projectContext';
 import { useEffect, useRef, useState } from 'react';
-import { Check, ExternalLink, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck, Trash2, Wifi } from 'lucide-react';
+import { Check, ExternalLink, Eye, EyeOff, KeyRound, LoaderCircle, Trash2, Wifi } from 'lucide-react';
 import { useApp } from '../store';
 import { hasKey, setKey, useCredentials, listModels, testConnection, verifyCguKey, providerName, endpoints, type ModelOption } from '../lib/ai';
 import { cguDocs, cguKeyPage, cguModelPresets } from '../lib/cgu';
@@ -11,13 +11,13 @@ const modelCache: Partial<Record<Provider, ModelOption[]>> = {};
 const presets = ['gpt-6-luna', 'gpt-5.6-luna'];
 const cguPresets: string[] = [...cguModelPresets];
 const preferredGeminiModel = 'gemini-flash-lite-latest';
-const keyLinks: Record<Provider, string> = { openai: 'https://platform.openai.com/api-keys', gemini: 'https://aistudio.google.com/api-keys', cgu: cguKeyPage, mercuryapi: 'https://air.cgu.edu.tw/mercuryapi/#redeem', grok: 'https://console.x.ai/' };
+const keyLinks: Partial<Record<Provider, string>> = { openai: 'https://platform.openai.com/api-keys', gemini: 'https://aistudio.google.com/api-keys', cgu: cguKeyPage, grok: 'https://console.x.ai/' };
 export function Settings({ close }: { close: () => void }) {
   const { preferences, pref } = useApp();
   const provider = preferences.provider; const model = preferences.models[provider];
   const availablePresets = provider === 'cgu' ? cguPresets : presets;
   const isCgu = provider === 'cgu';
-  const detectsModels = provider === 'mercuryapi' || provider === 'grok';
+  const detectsModels = provider === 'grok';
   useCredentials();
   const [key, setDraftKey] = useState(''); const [show, setShow] = useState(false);
   const [models, setModels] = useState<ModelOption[]>(modelCache[provider] || []);
@@ -81,16 +81,15 @@ export function Settings({ close }: { close: () => void }) {
     finally { setBusy(''); }
   }
   return <Modal title="連接你的 AI" description="讓模型協助理解文獻，由你決定何時分享哪些文字。" onClose={close}>
-    <div className="settings-body"><div className="provider-tabs">{providers.map(p => <button key={p} aria-label={providerName(p)} aria-pressed={provider === p} className={provider === p ? 'active' : ''} onClick={() => !busy && isProviderAvailable(p) && pref({ provider: p })} disabled={!!busy || !isProviderAvailable(p)}><span className={`provider-mark ${p === 'gemini' ? 'gemini-mark' : ''}`} aria-hidden="true">{p === 'openai' ? '✳' : p === 'cgu' ? '◈' : p === 'mercuryapi' ? '☿' : p === 'grok' ? '𝕏' : '✦'}</span><span>{providerName(p)}{!isProviderAvailable(p) && <small className="provider-unavailable">尚未開放</small>}</span>{hasKey(p) && <span className="connected-dot" />}</button>)}</div>
+    <div className="settings-body"><div className="provider-tabs">{providers.map(p => <button key={p} aria-label={providerName(p)} aria-pressed={provider === p} className={provider === p ? 'active' : ''} onClick={() => !busy && isProviderAvailable(p) && pref({ provider: p })} disabled={!!busy || !isProviderAvailable(p)}><span className={`provider-mark ${p === 'gemini' ? 'gemini-mark' : ''}`} aria-hidden="true">{p === 'openai' ? '✳' : p === 'cgu' ? '◈' : p === 'grok' ? '𝕏' : '✦'}</span><span>{providerName(p)}{!isProviderAvailable(p) && <small className="provider-unavailable">尚未開放</small>}</span>{hasKey(p) && <span className="connected-dot" />}</button>)}</div>
       {provider === 'gemini' && <p className="field-help gemini-recommendation">Google AI Studio 建議用 <code>{preferredGeminiModel}</code> 模型</p>}
       <div className="api-endpoint"><span>Base URL</span><code>{endpoints[provider]}</code></div>
       {provider === 'cgu' && <section className="cgu-connection">
         <p className="field-help">瀏覽器直接連線至 CGU API。</p>
         <p className="field-help"><a href={cguDocs} target="_blank" rel="noreferrer">CGU 官方 API 說明</a> · 一般 CGU 模型使用 Responses API；`gpt-oss:20b` 使用 Chat Completions。</p>
       </section>}
-      <div className="privacy-card"><ShieldCheck size={22} /><div><strong>金鑰只暫存在記憶體。</strong><p>不儲存至硬碟、localStorage、資料庫或 GitHub。重新整理或關閉分頁後，需重新輸入。呼叫時以 HTTPS 傳給所選供應商驗證。</p></div></div>
       <label className="field-label" htmlFor="api-key">你的 API key <span>{hasKey(provider) ? <><Check size={12} />本分頁已設定</> : '尚未設定'}</span></label>
-      <div className="key-input"><KeyRound size={16} /><input id="api-key" autoComplete="off" spellCheck={false} type={show ? 'text' : 'password'} placeholder={storedKey ? '***' : provider === 'gemini' ? 'AIza…' : provider === 'cgu' ? '貼上你的 CGU API key' : provider === 'mercuryapi' ? 'sk-mercury-…' : provider === 'grok' ? 'xai-…' : 'sk-…'} value={key} disabled={!!busy} onChange={e => setDraftKey(e.target.value)} aria-describedby={storedKey ? 'stored-key-help' : undefined} /><button className="icon-button" onClick={() => setShow(!show)} disabled={!key || !!busy} aria-label={show ? '隱藏 API key' : '顯示 API key'}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+      <div className="key-input"><KeyRound size={16} /><input id="api-key" autoComplete="off" spellCheck={false} type={show ? 'text' : 'password'} placeholder={storedKey ? '***' : provider === 'gemini' ? 'AIza…' : provider === 'cgu' ? '貼上你的 CGU API key' : provider === 'grok' ? 'xai-…' : 'sk-…'} value={key} disabled={!!busy} onChange={e => setDraftKey(e.target.value)} aria-describedby={storedKey ? 'stored-key-help' : undefined} /><button className="icon-button" onClick={() => setShow(!show)} disabled={!key || !!busy} aria-label={show ? '隱藏 API key' : '顯示 API key'}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
       {storedKey && <p className="field-help" id="stored-key-help">*** 表示此供應商的金鑰已暫存於本分頁；輸入新金鑰可更換。</p>}
       <div className="key-actions"><a href={keyLinks[provider]} target="_blank" rel="noreferrer">{provider === 'cgu' ? '啟用／取得 CGU API key' : `取得 ${providerName(provider)} API key`}<ExternalLink size={12} /></a><div><button className="text-button danger" onClick={clearKey} disabled={!keyReady || !!busy}><Trash2 size={13} />清除本機 API Key</button><button className="small-button" disabled={!key.trim() || !!busy} onClick={() => void saveKey()}>使用此金鑰</button></div></div>
       {detectsModels && <p className="field-help">按「使用此金鑰」後會自動偵測可用模型；也可按「自動偵測模型」重新查詢。模型偵測不會送出文字生成請求。</p>}
@@ -109,7 +108,7 @@ export function Settings({ close }: { close: () => void }) {
       <p className="field-help">預設選項與模型清單不保證帳戶有權限；請用測試連線確認。計費依你的供應商帳戶。</p>
       <div className="reasoning-field"><label className="field-label" htmlFor="reasoning-effort">推理程度</label>
         <select id="reasoning-effort" className="full-input" value={preferences.reasoningEffort} disabled={!usesReasoningEffort(provider) || !!busy} onChange={e => pref({ reasoningEffort: e.target.value as ReasoningEffort })} aria-describedby="reasoning-help">{reasoningEfforts.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}{effort === 'medium' ? '（預設）' : ''}</option>)}</select>
-        <p className="field-help" id="reasoning-help">{!usesReasoningEffort(provider) ? `${providerName(provider)} 使用模型自身的推理預設；此調整適用於 OpenAI、CGU 與 mercuryapi。` : '較高的推理程度可能增加等待時間與用量，實際支援依模型而定。'}</p>
+        <p className="field-help" id="reasoning-help">{!usesReasoningEffort(provider) ? `${providerName(provider)} 使用模型自身的推理預設；此調整適用於 OpenAI 與 CGU。` : '較高的推理程度可能增加等待時間與用量，實際支援依模型而定。'}</p>
       </div>
       {message && <div role="status" className={`settings-message ${ok ? 'success' : 'error'}`}>{ok ? <Check size={16} /> : <KeyRound size={16} />}<span>{message}</span></div>}
       <div className="data-disclosure"><strong>每次 AI 操作會傳送什麼？</strong><p>翻譯／段落摘要：該便條的文字（無原文時使用筆記），截圖不送交分析。<br />關聯摘要：確認預覽的便條文字與連線屬性。<br />全文摘要：目前 PDF 在本機擷取的分塊文字。<br />測試連線：一則簡短測試文字。資料直接傳給 {providerName(provider)}；本站沒有代管伺服器。</p></div>

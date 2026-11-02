@@ -11,6 +11,7 @@ import { containsPromptDisclosure, detectPromptInjection, promptSecurityMessage 
 const sessionKeys = new Map<Provider, string>();
 export const useCredentials = create<{ revision: number }>(() => ({ revision: 0 }));
 export function setKey(provider: Provider, key: string) {
+  if (!endpoints[provider]) throw new Error('This AI provider is no longer available.');
   const normalized = provider === 'cgu' ? normalizeCguKey(key) : key.trim();
   if (normalized) sessionKeys.set(provider, normalized); else sessionKeys.delete(provider);
   useCredentials.setState(s => ({ revision: s.revision + 1 }));
@@ -20,7 +21,7 @@ export function clearAllKeys() { sessionKeys.clear(); useCredentials.setState(s 
 window.addEventListener('pagehide', clearAllKeys);
 
 export interface ModelOption { id: string; label: string; capability: string }
-export const endpoints: Record<Provider, string> = { openai: 'https://api.openai.com/v1', gemini: 'https://generativelanguage.googleapis.com/v1beta', cgu: 'https://air.cgu.edu.tw/cgullmapi/v1', mercuryapi: 'https://air.cgu.edu.tw/mercuryapi/v1', grok: 'https://api.x.ai/v1' };
+export const endpoints: Partial<Record<Provider, string>> = { openai: 'https://api.openai.com/v1', gemini: 'https://generativelanguage.googleapis.com/v1beta', cgu: 'https://air.cgu.edu.tw/cgullmapi/v1', grok: 'https://api.x.ai/v1' };
 export const providerName = (p: Provider) => ({ openai: 'OpenAI', gemini: 'Google AI Studio', cgu: 'CGU API', mercuryapi: 'mercuryapi', grok: 'Grok（xAI）' })[p];
 const guard = [
   '你是嚴謹的研究閱讀助手，使用繁體中文。',
@@ -47,6 +48,8 @@ function readableError(status: number, raw: string, provider: Provider) {
   return status >= 500 ? '供應商暫時無法服務，請稍後重試。' : `供應商拒絕請求（${status}）。請檢查模型能力、API key 與帳戶設定。`;
 }
 async function request(provider: Provider, path: string, body?: unknown, signal?: AbortSignal) {
+  const endpoint = endpoints[provider];
+  if (!endpoint) throw new Error('This AI provider is no longer available.');
   const key = sessionKeys.get(provider);
   if (!key) throw new Error('尚未設定 API key。請在 AI 設定貼上你自己的金鑰。');
   const controller = new AbortController();
@@ -55,7 +58,7 @@ async function request(provider: Provider, path: string, body?: unknown, signal?
   signal?.addEventListener('abort', onAbort, { once: true });
   if (signal?.aborted) onAbort();
   try {
-    const response = await fetch(`${endpoints[provider]}${path}`, {
+    const response = await fetch(`${endpoint}${path}`, {
       method: body ? 'POST' : 'GET', signal: controller.signal, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer',
       headers: { ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(provider === 'gemini' ? { 'x-goog-api-key': key } : { Authorization: `Bearer ${key}` }) },

@@ -1,7 +1,9 @@
 export type Color = 'yellow' | 'green' | 'pink' | 'blue';
-export const providers = ['openai', 'cgu', 'gemini', 'mercuryapi', 'grok'] as const;
-export type Provider = typeof providers[number];
-export const isProviderAvailable = (provider: Provider) => provider !== 'openai' && provider !== 'grok';
+export const providers = ['openai', 'cgu', 'gemini', 'grok'] as const;
+// Retain retired provider metadata when reading existing research and backups.
+export const storedProviders = [...providers, 'mercuryapi'] as const;
+export type Provider = typeof storedProviders[number];
+export const isProviderAvailable = (provider: Provider) => provider !== 'openai' && provider !== 'grok' && provider !== 'mercuryapi';
 export const usesReasoningEffort = (provider: Provider) => provider !== 'gemini' && provider !== 'grok';
 export const reasoningEfforts = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = typeof reasoningEfforts[number];

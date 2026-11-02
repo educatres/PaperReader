@@ -93,13 +93,14 @@ describe('source-preserving text chunking', () => {
 });
 describe('session-only credentials', () => {
   it('clears independent providers without affecting research data', () => {
-    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b'); setKey('cgu', 'test-key-c'); setKey('mercuryapi', 'test-key-d'); setKey('grok', 'test-key-e');
+    setKey('openai', 'test-key-a'); setKey('gemini', 'test-key-b'); setKey('cgu', 'test-key-c'); setKey('grok', 'test-key-e');
     expect(hasKey('openai')).toBe(true); expect(hasKey('gemini')).toBe(true);
     setKey('openai', ''); expect(hasKey('openai')).toBe(false); expect(hasKey('gemini')).toBe(true);
-    expect(hasKey('cgu')).toBe(true); expect(hasKey('mercuryapi')).toBe(true);
-    expect(hasKey('grok')).toBe(true); setKey('grok', ''); expect(hasKey('grok')).toBe(false); expect(hasKey('mercuryapi')).toBe(true);
+    expect(hasKey('cgu')).toBe(true);
+    expect(() => setKey('mercuryapi', 'retired-key')).toThrow('no longer available');
+    expect(hasKey('grok')).toBe(true); setKey('grok', ''); expect(hasKey('grok')).toBe(false);
     setKey('grok', 'test-key-e');
-    clearAllKeys(); expect(hasKey('gemini')).toBe(false); expect(hasKey('cgu')).toBe(false); expect(hasKey('mercuryapi')).toBe(false);
+    clearAllKeys(); expect(hasKey('gemini')).toBe(false); expect(hasKey('cgu')).toBe(false);
     expect(hasKey('grok')).toBe(false);
     expect(JSON.stringify(emptyWorkspace())).not.toContain('test-key');
   });
