@@ -1,7 +1,7 @@
 export const cguDocs = 'https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html';
 export const cguKeyPage = 'https://air.cgu.edu.tw/workspace4/LLMAPI/index.php';
 export const cguModelPresets = ['gemma-4-26b-a4b-it', 'gpt-oss:20b', 'gpt-oss-120b'] as const;
-export const defaultCguModel = 'gpt-oss:20b';
+export const defaultCguModel = cguModelPresets[0];
 export function normalizeCguKey(value: string) {
   const raw = value.trim(); if (!raw) return '';
   const key = raw.replace(/^Authorization:\s*/i, '').replace(/^Bearer(?:\s+|$)/i, '');

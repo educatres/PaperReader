@@ -17,7 +17,7 @@
 1. 開啟「我的專案」，建立並命名專案；進入後匯入 PDF，或點「先試讀一篇範例」。既有研究升級後會保留為第一個專案。
 2. 螢光筆模式下跨行選字，放開滑鼠就會建立一組標記與便條。跨頁請分開標記。文字選取以灰色顯示，與黃色螢光標記區分；選「手掌模式」可拖曳移動 PDF，翻頁按鈕與頁碼位於閱讀面板上方。
 3. 拖曳便條標題整理白板；從四邊的連接點拖到另一張卡片，建立人工研究關係。雙擊連線可修改。
-4. 點「連接你的 AI」，選擇 Google AI Studio 或 CGU API（OpenAI、Grok 尚未開放），貼上自己的 API key，再選擇模型與測試連線。OpenAI 可直接選 `gpt-6-luna`、`gpt-5.6-luna`；CGU API 只列出 `gemma-4-26b-a4b-it`、`gpt-oss:20b`、`gpt-oss-120b`，預設選取 `gpt-oss:20b`。推理程度可選低／中／高，預設為中。Gemini 與 Grok 使用模型預設推理。
+4. 點「連接你的 AI」，選擇 Google AI Studio 或 CGU API（OpenAI、Grok 尚未開放），貼上自己的 API key，再選擇模型與測試連線。OpenAI 可直接選 `gpt-6-luna`、`gpt-5.6-luna`；CGU API 只列出 `gemma-4-26b-a4b-it`、`gpt-oss:20b`、`gpt-oss-120b`，預設選取 `gemma-4-26b-a4b-it`。推理程度可選低／中／高，預設為中。Gemini 與 Grok 使用模型預設推理。
 5. 點便條翻譯／摘要，或確認全文摘要的文字傳送範圍。
 6. 定期匯出目前專案的 `.researchpack`，包含 PDF、標記、筆記、連線與視角。從總覽匯入會建立新專案；文獻庫的「還原研究封裝 / JSON」經確認後取代目前專案。
 7. 文件列右側可「隱藏工具列」以增加閱讀空間；按同一位置的「展開工具列」可恢復。收合狀態會記住，手機版以箭頭圖示操作。
@@ -94,7 +94,7 @@ Base URL 為 `https://api.x.ai/v1`。在「連接你的 AI → Grok（xAI）」�
 
 ### CGU 連線
 
-依 [CGU 官方文件](https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html)，Base URL 為 `https://air.cgu.edu.tw/cgullmapi/v1`，使用 `Authorization: Bearer 金鑰`。介面只列出 `gemma-4-26b-a4b-it`、`gpt-oss:20b`、`gpt-oss-120b`；一般 CGU 模型使用 Responses API，預設的 `gpt-oss:20b` 依官方模型目錄使用 Chat Completions。請先到 [CGU API Key 頁面](https://air.cgu.edu.tw/workspace4/LLMAPI/index.php) 啟用、複製金鑰。可直接貼上純金鑰，或包含 `Bearer`／`Authorization: Bearer` 前綴。
+依 [CGU 官方文件](https://air.cgu.edu.tw/workspace4/LLMAPI/api_call.html)，Base URL 為 `https://air.cgu.edu.tw/cgullmapi/v1`，使用 `Authorization: Bearer 金鑰`。介面只列出 `gemma-4-26b-a4b-it`、`gpt-oss:20b`、`gpt-oss-120b`；一般 CGU 模型使用 Responses API，`gpt-oss:20b` 依官方模型目錄使用 Chat Completions。請先到 [CGU API Key 頁面](https://air.cgu.edu.tw/workspace4/LLMAPI/index.php) 啟用、複製金鑰。可直接貼上純金鑰，或包含 `Bearer`／`Authorization: Bearer` 前綴。
 
 CGU 已支援 CORS，程式一律由瀏覽器以 HTTPS 直接連線。
 

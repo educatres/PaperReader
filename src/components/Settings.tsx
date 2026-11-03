@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ExternalLink, Eye, EyeOff, KeyRound, LoaderCircle, Trash2, Wifi } from 'lucide-react';
 import { useApp } from '../store';
 import { hasKey, setKey, useCredentials, listModels, testConnection, verifyCguKey, providerName, endpoints, type ModelOption } from '../lib/ai';
-import { cguDocs, cguKeyPage, cguModelPresets } from '../lib/cgu';
+import { cguDocs, cguKeyPage, cguModelPresets, defaultCguModel } from '../lib/cgu';
 import { Modal } from './Modal';
 import { providers, isProviderAvailable, reasoningEfforts, reasoningLabels, usesReasoningEffort, type Provider, type ReasoningEffort } from '../types';
 
@@ -83,6 +83,7 @@ export function Settings({ close }: { close: () => void }) {
   return <Modal title="連接你的 AI" description="讓模型協助理解文獻，由你決定何時分享哪些文字。" onClose={close}>
     <div className="settings-body"><div className="provider-tabs">{providers.map(p => <button key={p} aria-label={providerName(p)} aria-pressed={provider === p} className={provider === p ? 'active' : ''} onClick={() => !busy && isProviderAvailable(p) && pref({ provider: p })} disabled={!!busy || !isProviderAvailable(p)}><span className={`provider-mark ${p === 'gemini' ? 'gemini-mark' : ''}`} aria-hidden="true">{p === 'openai' ? '✳' : p === 'cgu' ? '◈' : p === 'grok' ? '𝕏' : '✦'}</span><span>{providerName(p)}{!isProviderAvailable(p) && <small className="provider-unavailable">尚未開放</small>}</span>{hasKey(p) && <span className="connected-dot" />}</button>)}</div>
       {provider === 'gemini' && <p className="field-help gemini-recommendation">Google AI Studio 建議用 <code>{preferredGeminiModel}</code> 模型</p>}
+      {isCgu && <p className="field-help">CGU API 建議使用 <code>{defaultCguModel}</code> 模型</p>}
       <div className="api-endpoint"><span>Base URL</span><code>{endpoints[provider]}</code></div>
       {provider === 'cgu' && <section className="cgu-connection">
         <p className="field-help">瀏覽器直接連線至 CGU API。</p>
@@ -106,6 +107,7 @@ export function Settings({ close }: { close: () => void }) {
       <input id="model-id" list="provider-models" value={model} onChange={e => changeModel(e.target.value.trim())} placeholder="輸入自訂模型 ID，或從取得的清單選擇" autoComplete="off" className="full-input" disabled={!!busy} />
       <datalist id="provider-models">{visibleModels.map(m => <option key={m.id} value={m.id}>{m.label} · {m.capability}</option>)}</datalist>
       <p className="field-help">預設選項與模型清單不保證帳戶有權限；請用測試連線確認。計費依你的供應商帳戶。</p>
+      <p className="field-help">清單中的部分模型僅支援圖片或語音處理，無法用於本服務的文字翻譯與摘要。</p>
       <div className="reasoning-field"><label className="field-label" htmlFor="reasoning-effort">推理程度</label>
         <select id="reasoning-effort" className="full-input" value={preferences.reasoningEffort} disabled={!usesReasoningEffort(provider) || !!busy} onChange={e => pref({ reasoningEffort: e.target.value as ReasoningEffort })} aria-describedby="reasoning-help">{reasoningEfforts.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}{effort === 'medium' ? '（預設）' : ''}</option>)}</select>
         <p className="field-help" id="reasoning-help">{!usesReasoningEffort(provider) ? `${providerName(provider)} 使用模型自身的推理預設；此調整適用於 OpenAI 與 CGU。` : '較高的推理程度可能增加等待時間與用量，實際支援依模型而定。'}</p>
