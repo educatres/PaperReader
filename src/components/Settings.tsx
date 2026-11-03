@@ -107,7 +107,7 @@ export function Settings({ close }: { close: () => void }) {
       <input id="model-id" list="provider-models" value={model} onChange={e => changeModel(e.target.value.trim())} placeholder="輸入自訂模型 ID，或從取得的清單選擇" autoComplete="off" className="full-input" disabled={!!busy} />
       <datalist id="provider-models">{visibleModels.map(m => <option key={m.id} value={m.id}>{m.label} · {m.capability}</option>)}</datalist>
       <p className="field-help">預設選項與模型清單不保證帳戶有權限；請用測試連線確認。計費依你的供應商帳戶。</p>
-      <p className="field-help">清單中的部分模型僅支援圖片或語音處理，無法用於本服務的文字翻譯與摘要。</p>
+      <p className="field-help">清單中的部分模型僅能處理圖片或語音。本服務的翻譯與摘要需要能處理文字的 AI 模型，請選擇支援文字的模型。</p>
       <div className="reasoning-field"><label className="field-label" htmlFor="reasoning-effort">推理程度</label>
         <select id="reasoning-effort" className="full-input" value={preferences.reasoningEffort} disabled={!usesReasoningEffort(provider) || !!busy} onChange={e => pref({ reasoningEffort: e.target.value as ReasoningEffort })} aria-describedby="reasoning-help">{reasoningEfforts.map(effort => <option key={effort} value={effort}>{reasoningLabels[effort]}{effort === 'medium' ? '（預設）' : ''}</option>)}</select>
         <p className="field-help" id="reasoning-help">{!usesReasoningEffort(provider) ? `${providerName(provider)} 使用模型自身的推理預設；此調整適用於 OpenAI 與 CGU。` : '較高的推理程度可能增加等待時間與用量，實際支援依模型而定。'}</p>
