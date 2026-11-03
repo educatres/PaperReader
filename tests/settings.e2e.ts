@@ -58,12 +58,14 @@ test('CGU presets use model-appropriate direct endpoints with isolated session k
   await expect(page.getByLabel('CGU 連線方式')).toHaveCount(0);
   await expect(page.getByLabel('你的 API key')).toHaveValue('');
   await expect(page.getByLabel('你的 API key')).not.toHaveAccessibleName(/本分頁已設定/);
-  await expect(page.getByLabel('模型選項')).toHaveValue('gemma-4-26b-a4b-it');
-  await expect(page.getByLabel('模型選項').locator('option')).toHaveText(['gemma-4-26b-a4b-it', 'gpt-oss:20b', 'gpt-oss-120b']);
+  await expect(page.getByLabel('模型選項')).toBeDisabled();
+  await expect(page.getByLabel('選擇模型')).toHaveValue('gemma-4-26b-a4b-it');
   await expect(page.getByLabel('推理程度')).toHaveValue('medium');
-  await page.getByLabel('模型選項').selectOption('gpt-oss:20b');
   await page.getByLabel('你的 API key').fill('cgu-secret-never-persist');
-  await page.getByRole('button', { name: '使用此金鑰' }).click();
+  await page.getByRole('button', { name: '取得模型清單' }).click();
+  await expect(page.getByLabel('模型選項')).toHaveValue('gemma-4-26b-a4b-it');
+  await expect(page.getByLabel('模型選項').locator('option')).toHaveText(['gemma-4-26b-a4b-it', 'gpt-oss-120b', 'gpt-oss:20b']);
+  await page.getByLabel('模型選項').selectOption('gpt-oss:20b');
   await page.getByRole('button', { name: /測試連線/ }).click();
   await expect(page.locator('.settings-message')).toContainText('連線成功');
   expect(requests.at(-1)!.url).toBe('https://air.cgu.edu.tw/cgullmapi/v1/chat/completions');
