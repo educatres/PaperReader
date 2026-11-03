@@ -202,31 +202,31 @@
 /* AI settings text below the modal header. */
 .settings-body :is(.field-help, .api-endpoint, .data-disclosure strong, .data-disclosure p, .text-button, .key-actions .small-button),
 .settings-body .key-actions > a {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .settings-body :is(.field-label, .settings-message),
 .settings-body .provider-tabs > button {
-  font-size: 12.1px;
+  font-size: 13.2px;
 }
 
 .settings-body :is(.full-input, .key-input input, .cgu-verify .small-button),
 .settings-body + .modal-actions :is(.primary-button, .secondary-button) {
-  font-size: 13.2px;
+  font-size: 14.4px;
 }
 
 .settings-body :is(.provider-unavailable, .field-label > span),
 .settings-body + .modal-actions .subtle {
-  font-size: 9.9px;
+  font-size: 10.8px;
 }
 
 @media (max-width: 700px) {
   .settings-body .key-actions > a,
   .settings-body .key-actions .small-button {
-    font-size: 9.9px;
+    font-size: 10.8px;
   }
 
   .settings-body .provider-tabs > button {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
