@@ -46,6 +46,7 @@
 .provider-tabs > button { gap: 6px; padding: 10px 8px; font-size: 11px; }
 .provider-tabs > button:disabled { cursor: not-allowed; opacity: .6; }
 .provider-unavailable { display: block; font-size: 9px; margin-top: 4px; }
+.field-help.model-recommendation { color: #a62626; }
 .gemini-recommendation { margin: -6px 0 16px; }
 .api-endpoint { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: -6px 0 16px; font-size: 10px; color: #758269; }
 .api-endpoint code { overflow-wrap: anywhere; }
@@ -198,3 +199,34 @@
 @media(max-width:600px){.projects-header{min-height:75px;height:auto;padding:16px 18px;flex-wrap:wrap;gap:14px 20px}.projects-header-actions{gap:6px;margin-left:auto}.projects-header-actions>.secondary-button{font-size:11px;padding:8px}.projects-header .brand h1{font-size:21px}.projects-header .brand-tagline{font-size:7px;letter-spacing:1.2px}.projects-header .brand-symbol{width:34px;height:38px}.projects-main{padding:30px 20px}.projects-heading{align-items:flex-start;gap:12px;margin-bottom:26px}.projects-heading h2{font-size:28px}.projects-heading p{font-size:12px;max-width:190px}.projects-heading .primary-button{font-size:11px;padding:9px 11px;margin-top:22px}.projects-heading .eyebrow{font-size:7px;letter-spacing:1px}.project-grid{grid-template-columns:minmax(0,1fr);gap:15px}.project-card-main{min-height:210px;padding:23px}.projects-controls{gap:10px}.projects-controls select{max-width:110px;font-size:11px;padding:10px 8px}.project-search{padding:10px;min-width:0}.projects-footer{flex-direction:column;align-items:flex-start;gap:18px}.projects-footer>span{justify-content:flex-start}.projects-footer small{text-align:left}.projects-empty{padding:35px 18px;min-height:370px}.projects-empty h3{font-size:20px}.reader-window-header>.project-back-button{max-width:60px;white-space:normal;line-height:1.5}.app-header .header-project{display:block;min-width:100px;padding-left:10px;flex:1}.app-header .header-project>span{display:none}.app-header .header-project input{font-size:12px}.app-header .project-back-button{font-size:10px}.projects-header .version-tag{display:none}}
 
 .project-confirm-copy{line-height:1.9;overflow-wrap:anywhere}
+/* AI settings text below the modal header. */
+.settings-body :is(.field-help, .api-endpoint, .data-disclosure strong, .data-disclosure p, .text-button, .key-actions .small-button),
+.settings-body .key-actions > a {
+  font-size: 11px;
+}
+
+.settings-body :is(.field-label, .settings-message),
+.settings-body .provider-tabs > button {
+  font-size: 12.1px;
+}
+
+.settings-body :is(.full-input, .key-input input, .cgu-verify .small-button),
+.settings-body + .modal-actions :is(.primary-button, .secondary-button) {
+  font-size: 13.2px;
+}
+
+.settings-body :is(.provider-unavailable, .field-label > span),
+.settings-body + .modal-actions .subtle {
+  font-size: 9.9px;
+}
+
+@media (max-width: 700px) {
+  .settings-body .key-actions > a,
+  .settings-body .key-actions .small-button {
+    font-size: 9.9px;
+  }
+
+  .settings-body .provider-tabs > button {
+    font-size: 11px;
+  }
+}

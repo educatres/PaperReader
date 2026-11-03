@@ -82,8 +82,8 @@ export function Settings({ close }: { close: () => void }) {
   }
   return <Modal title="連接你的 AI" description="讓模型協助理解文獻，由你決定何時分享哪些文字。" onClose={close}>
     <div className="settings-body"><div className="provider-tabs">{providers.map(p => <button key={p} aria-label={providerName(p)} aria-pressed={provider === p} className={provider === p ? 'active' : ''} onClick={() => !busy && isProviderAvailable(p) && pref({ provider: p })} disabled={!!busy || !isProviderAvailable(p)}><span className={`provider-mark ${p === 'gemini' ? 'gemini-mark' : ''}`} aria-hidden="true">{p === 'openai' ? '✳' : p === 'cgu' ? '◈' : p === 'grok' ? '𝕏' : '✦'}</span><span>{providerName(p)}{!isProviderAvailable(p) && <small className="provider-unavailable">尚未開放</small>}</span>{hasKey(p) && <span className="connected-dot" />}</button>)}</div>
-      {provider === 'gemini' && <p className="field-help gemini-recommendation">Google AI Studio 建議用 <code>{preferredGeminiModel}</code> 模型</p>}
-      {isCgu && <p className="field-help">CGU API 建議使用 <code>{defaultCguModel}</code> 模型</p>}
+      {provider === 'gemini' && <p className="field-help model-recommendation gemini-recommendation">Google AI Studio 建議用 <code>{preferredGeminiModel}</code> 模型</p>}
+      {isCgu && <p className="field-help model-recommendation">CGU API 建議使用 <code>{defaultCguModel}</code> 模型</p>}
       <div className="api-endpoint"><span>Base URL</span><code>{endpoints[provider]}</code></div>
       {provider === 'cgu' && <section className="cgu-connection">
         <p className="field-help">瀏覽器直接連線至 CGU API。</p>
